@@ -1,0 +1,157 @@
+# Freight LTL planning ontology (prototype v1) — the "context engineering" layer.
+# Entities, relationships, constraints and metric definitions the planner, the math
+# model and the GenAI explainer all share. Illustrative sample-data prototype.
+
+entities:
+  Terminal:
+    attrs: [terminal_code, city, type]  # type: breakbulk | eol
+    desc: Service center. Breakbulk sorts cross-dock freight; EOL serves local P&D.
+  Lane:
+    attrs: [terminal_a, terminal_b, miles, cost_per_mile_usd]
+    desc: Linehaul lane. cost_per_mile varies by domiciled driver pay + local demographics.
+  Product:
+    values: {P: "Priority - fast, next-day regional", E: "Economy - ~1 day slower"}
+  DesignRoute:
+    attrs: [origin, dest, product, standard_path, path_type, path_miles]
+    desc: "Structured network: every OD x product has ONE standard path we try to follow."
+  Shipment:
+    attrs: [shipment_id, date, customer, origin, dest, product, weight_lbs, pieces,
+            density_lb_per_cuft, inferred_cube_cuft, dimmed_cube_cuft, revenue_usd]
+    desc: Shippers do NOT provide cube. Planner infers cube at pickup from the
+           shipper's historical density profile. Dock dimming gives true cube but
+           arrives too late to plan doors/trailers.
+  LaneForecast:
+    attrs: [date, origin, dest, product, forecast_shipments, forecast_cube_cuft,
+            actual_shipments, actual_cube_cuft]
+    desc: Lane-level forecast made the prior day; the basis for pre-planning doors/trailers.
+  LinehaulActual:  # "layer actuals" - what was dispatched
+    attrs: [load_id, lane, direction, trailer_no, cube_cuft, weight_lbs,
+            cube_util_pct, empty, flows]
+    desc: Dispatched trailer. empty=true marks a domicile return running empty.
+  Turn:
+    desc: Domiciled driver unit. Every dispatch is out-and-back; driver returns to
+          home center nightly. turns(lane) = max(trailers_out, trailers_in).
+          Equipment balances nightly BECAUSE drivers come home.
+  Deviation:
+    attrs: [od, product, standard, chosen, reason, saving_usd]
+    desc: Cost-driven departure from the standard path. Two kinds only.
+  CostToServe:
+    attrs: [shipment_id, pud_cost_usd, dock_cost_usd, linehaul_cost_usd,
+            cost_to_serve_usd, margin_usd, margin_pct, leg_cost_detail]
+    desc: Full cost of a shipment vs what the customer paid.
+
+relationships:
+  - Shipment --(origin/dest)--> Terminal
+  - Shipment --(product)--> Product
+  - Shipment --(assigned)--> LinehaulActual  # via flow segment on a leg
+  - DesignRoute --(legs)--> Lane
+  - LinehaulActual --(runs on)--> Lane
+  - LinehaulActual --(part of)--> Turn
+  - Deviation --(overrides)--> DesignRoute
+
+constraints:  # hard rules the math model must respect
+  - trailer_cube_cap_cuft: 1750      # 28' pup, illustrative
+  - trailer_weight_cap_lbs: 20000
+  - pups_per_turn: 2                 # doubles: one driver pulls two pups
+  - turn_cube_cap_cuft: 3500         # turn is the cost unit
+  - priority_service: "path legs <= 2 AND path miles <= 600"
+  - economy_service: "path legs <= 2 AND path miles <= 1000"
+  - domicile: "every driver returns to home service center same night; a turn is a ROUND TRIP"
+  - equipment_balance: "pups available at terminal >= pups dispatched (nightly)"
+  - bounded_deviation: "daily path choice restricted to pre-approved alternate set (alternate_paths.csv)"
+
+business_rules:  # planner heuristics encoded as context
+  - design_horizon: "MONTHLY network design sets standard path + bounded alternates per OD x product"
+  - execution_horizon: "DAILY execution starts from standard paths, deviates only on cost"
+  - deviation_rule: "Deviate from standard path ONLY to minimize total cost
+      (linehaul turns vs dock handles), and ONLY onto a pre-approved alternate.
+      Direct a heavy via-hub flow to cut handles; consolidate a light direct flow via hub to gain density."
+  - direct_threshold: "consider direct when flow cube >= 60% of a pup"
+  - consolidate_threshold: "consider via-hub when direct flow cube < 45% of a pup"
+  - cube_first: "a driver turn costs the same full or empty: fill pups on running turns
+      before dispatching another driver. Cube utilization is the dominant cost lever."
+  - cube_rule: "plan on INFERRED cube (pickup estimate); report on DIMMED cube (actual)"
+  - empty_rule: "with domiciled doubles, imbalance shows as EMPTY PUP SLOTS on running turns
+      (marginal cost ~$0), not empty miles. Charge the waste to the imbalance via cube allocation."
+  - tower_rule: "evaluate every tower action NETWORK-WIDE: a cancel must leave room in BOTH
+      directions (round trip); a reroute must land in spare pup slots on the alternate path.
+      Block locally-cheap moves that hurt the network."
+
+metrics:
+  cube_utilization_pct:
+    def: "loaded cube / pup cube capacity, per leg; cube-weighted network avg"
+    good: ">= 85 loaded legs"
+  driver_turns:
+    def: "turns(lane) = ceil(max(pups needed each way) / 2); one driver, two pups, round trip"
+    note: "the cost unit of linehaul: fixed whether pups are full or empty"
+  handles_per_shipment:
+    def: "dock touches per shipment: 2 direct, 4 via hub"
+    lever: "loading directs is the handle-reduction lever"
+  empty_pup_pct:
+    def: "empty pup slots / total pup slots dispatched"
+    note: "with domiciled doubles the waste is density, not miles; goal is efficient, not zero"
+  leg_efficiency:
+    def: "cost_per_cube_mile_usd = allocated leg cost / (cube x miles)"
+    use: "compare legs; high values flag lanes to fix (price, consolidate, direct)"
+  mile_verdict:
+    good_mile: "linehaul mile at >= 70% cube utilization on a needed lane"
+    bad_mile: "empty or < 40% utilized mile"
+  cost_to_serve_usd:
+    def: "pud_cost + dock_cost + sum of leg allocations by cube share"
+    note: "turn cost splits across directions by cube share, so the direction that
+           creates imbalance absorbs its empty returns"
+  margin: "revenue_usd - cost_to_serve_usd, per shipment / lane / customer / product"
+  forecast_mape_pct: "mean absolute % error of lane cube forecast vs actual"
+
+genai_roles:
+  plan_explainer:
+    desc: "Explain the night's plan in planner language: which deviations, why
+           (cost math shown), which legs are bad miles and what drives them."
+  deviation_justifier:
+    desc: "For each deviation: standard path vs chosen, handles saved/added,
+           linehaul delta, net saving. Auditable by network planners."
+  cost_to_serve_narrator:
+    desc: "Why did this shipment/lane/customer lose money? P&D, dock, leg-level
+           linehaul attribution in plain language for pricing decisions."
+  tower_copilot:
+    desc: "Draft the Central -> service-center message for each tower action:
+           what changed, recommended move, network check verdict, cost/service impact.
+           Grounded on the tower engine's outputs, never free-form."
+  conversational_analyst:
+    desc: "Answer planner questions over the scenario data (KPIs, deviations, tower,
+           scoreboard, cost-to-serve) using only grounded context. Bring-your-own-key
+           LLM; key lives in session/secrets/env, never in the repo."
+  exception_copilot:
+    desc: "Forecast missed, trailer short, dock door conflict: what broke, options,
+           recommended action with cost/service trade-off."
+  c_suite_briefer:
+    desc: "Network night in 5 bullets: cost, utilization, bad miles, margin, tomorrow's risk."
+
+math_model:  # daily linehaul planning problem (prototype formulation)
+  name: "LTL daily load planning: doubles turns, standard paths, network-global tower"
+  decide:
+    - "path(f) in {standard(f)} U alternates(f) for each OD-product flow f (bounded set)"
+    - "turns(l) integer >= 0 for each lane l  [turn = 1 driver, 2 pups, round trip]"
+    - "assignment of flow segments to pups on each directed leg"
+  minimize: "sum_l turns(l) x turn_cost(l) + sum_shipments handles(s) x dock_cost"
+  subject_to:
+    - "pup cube (1750 cu ft) and weight capacity"
+    - "service windows by product (above)"
+    - "domicile round trips: turns(l) = ceil(max(pups_AB, pups_BA)/2); equipment conserved nightly"
+    - "deviations restricted to pre-approved alternate set"
+    - "flow conservation at breakbulk"
+  tower_engine: "at each checkpoint, project turns vs plan per lane-direction;
+    surge -> min(add turn, reroute overflow into spare pup slots on alternate);
+    shortfall -> cancel only if BOTH directions keep room (round-trip coupling),
+    else BLOCK. Prototype: transparent rules; production: network MIP."
+  method_prototype: "greedy deviation search on standard-path start (transparent,
+    every move auditable); production: MIP (Gurobi/OR-Tools) or learned optimizer"
+
+tech_stack_to_implement:
+  - "data: shipment events, dimming feed, telematics, dock systems -> feature store"
+  - "forecast: lane-level hierarchical model (shipments, weight, cube); track MAPE"
+  - "cube inference: shipper density profiles refreshed from dimming actuals"
+  - "optimizer: MIP for nightly plan; ML optimization proxy (Mak et al. 2023) for speed"
+  - "context/ontology: this file - constraints and rules as machine-readable context"
+  - "genai: LLM explainer grounded on optimizer outputs + ontology (no free-form numbers)"
+  - "app: planner UI (network map, load plan, deviations, cost-to-serve) + exec dashboard"

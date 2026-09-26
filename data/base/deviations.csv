@@ -1,0 +1,10 @@
+od,product,standard,chosen,reason,saving
+MEM>MKC,P,MEM>SGF>MKC,MEM>MKC direct,direct saves $518 (2 fewer handles x 26 shipments),517.99
+MEM>TUL,E,MEM>SGF>TUL,MEM>TUL direct,direct saves $322 (2 fewer handles x 14 shipments),322.12
+MEM>TUL,P,MEM>SGF>TUL,MEM>TUL direct,direct saves $347 (2 fewer handles x 16 shipments),347.22
+MKC>MEM,P,MKC>SGF>MEM,MKC>MEM direct,"direct saves $1,037 (2 fewer handles x 29 shipments)",1036.78
+MKC>TUL,E,MKC>SGF>TUL,MKC>TUL direct,direct saves $571 (2 fewer handles x 20 shipments),570.51
+MKC>TUL,P,MKC>SGF>TUL,MKC>TUL direct,direct saves $688 (2 fewer handles x 31 shipments),688.22
+STL>TUL,P,STL>SGF>TUL,STL>TUL direct,direct saves $636 (2 fewer handles x 23 shipments),635.54
+TUL>MEM,P,TUL>SGF>MEM,TUL>MEM direct,direct saves $593 (2 fewer handles x 24 shipments),592.88
+TUL>MKC,P,TUL>SGF>MKC,TUL>MKC direct,"direct saves $1,136 (2 fewer handles x 33 shipments)",1135.64

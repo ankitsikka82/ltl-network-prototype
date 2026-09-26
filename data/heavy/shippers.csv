@@ -1,0 +1,13 @@
+customer_id,customer,home_terminal,commodity,density_lb_per_cuft
+S01,AutoParts Co,SGF,auto parts,22
+S02,Ozark Furniture,SGF,furniture,7
+S03,Paper Mill Supply,STL,paper,18
+S04,Gateway Electronics,STL,electronics,10
+S05,KC Food Dist,MKC,canned food,30
+S06,Midwest Apparel,MKC,apparel,8
+S07,Memphis Machinery,MEM,machinery,25
+S08,Delta Plastics,MEM,plastics,9
+S09,Tulsa Beverage,TUL,beverages,28
+S10,Plains Pharma,TUL,pharma,12
+S11,Ozark Building,SGF,building materials,20
+S12,Crossroads Retail,MKC,retail mixed,11
