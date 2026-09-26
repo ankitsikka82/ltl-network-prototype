@@ -50,12 +50,79 @@ st.title("LTL Network Planning Prototype")
 st.caption(f"Operating day {k['date']} · 5-terminal cluster (SGF breakbulk hub; STL, MKC, MEM, TUL) · "
            f"scenario: {scenario}")
 
-tabs = st.tabs(["Nightly KPIs", "Network", "Load plan", "Deviations",
+tabs = st.tabs(["Network", "Nightly KPIs", "Load plan", "Deviations",
                 "Control tower", "Cost to serve", "Lane scoreboard",
-                "Forecast vs actual", "Methodology", "Ask the network", "Data downloads"])
+                "Forecast vs actual", "Ontology & context", "Methodology",
+                "Ask the network", "Data downloads"])
+
+# ------------------------------ Network (start here) ------------------------------
+with tabs[0]:
+    st.caption("Start here: this is the network the whole app reasons about. "
+               "Five terminals, SGF as the breakbulk hub, linehaul lanes between them, "
+               "and one standard path per OD × product from the monthly design.")
+
+    def _network_dot(highlight=()):
+        """highlight: set of 'A>B' legs to draw bold red."""
+        lines = ["digraph {", "  rankdir=LR;", "  node [shape=circle, style=filled, fillcolor=white];"]
+        for _, t in d["terminals"].iterrows():
+            if t["type"] == "breakbulk":
+                lines.append(f'  {t["terminal"]} [shape=doublecircle, fillcolor=gold, '
+                             f'label="{t["terminal"]}\\nbreakbulk"];')
+            else:
+                lines.append(f'  {t["terminal"]} [label="{t["terminal"]}\\n{t["city"].split()[0]}"];')
+        for _, l in d["lanes"].iterrows():
+            a, b = l["terminal_a"], l["terminal_b"]
+            for x, y in ((a, b), (b, a)):
+                tag = f"{x}>{y}"
+                if tag in highlight:
+                    lines.append(f'  {x} -> {y} [label="{int(l["miles"])} mi", color=red, '
+                                 f'penwidth=3.0];')
+                else:
+                    lines.append(f'  {x} -> {y} [label="{int(l["miles"])} mi", color=gray70];')
+        lines.append("}")
+        return "\n".join(lines)
+
+    st.subheader("Network map — nodes and linehaul arcs")
+    st.graphviz_chart(_network_dot(), use_container_width=True)
+    st.caption("Arcs are linehaul lanes (miles shown). Gold double-circle = breakbulk hub "
+               "where freight cross-docks; the rest are end-of-line centers doing local P&D.")
+
+    st.subheader("Watch a shipment move")
+    st.caption("A Priority shipment STL → MEM rides the standard path STL → SGF → MEM. "
+               "Press play to animate it across the map.")
+    legs = ["STL>SGF", "SGF>MEM"]
+    if st.button("▶ Play shipment flow"):
+        ph = st.empty()
+        ph.graphviz_chart(_network_dot(), use_container_width=True)
+        import time as _t
+        for i, leg in enumerate(legs):
+            _t.sleep(0.9)
+            ph.graphviz_chart(_network_dot(set(legs[:i + 1])), use_container_width=True)
+        _t.sleep(0.6)
+        st.success("STL → SGF → MEM: two handles (one cross-dock at SGF), path miles ≈ "
+                   f"{int(d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','STL'),'miles'] + d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','MEM'),'miles'])}.")
+
+    st.subheader("Terminals (nodes)")
+    st.dataframe(d["terminals"], use_container_width=True, hide_index=True)
+    st.subheader("Linehaul lanes (arcs) — cost/mile varies by domicile pay + demographics")
+    st.dataframe(d["lanes"], use_container_width=True, hide_index=True)
+    st.subheader("Design routes — the structured network: one standard path per OD x product")
+    prod = st.selectbox("Product", ["P", "E"],
+                        format_func=lambda p: "Priority (fast)" if p == "P" else "Economy (~1 day slower)")
+    st.dataframe(d["design_routes"][d["design_routes"]["product"] == prod]
+                 .drop(columns=["product"]), use_container_width=True, hide_index=True)
+    st.caption("Planners try to follow the standard path; deviations are cost-driven (see Deviations tab).")
+    st.subheader("Pre-approved alternate paths — the monthly design bounds daily execution")
+    alt_p = os.path.join(DATA, "alternate_paths.csv")
+    if os.path.exists(alt_p):
+        alt = pd.read_csv(alt_p)
+        st.dataframe(alt[alt["product"] == prod].drop(columns=["product"]),
+                     use_container_width=True, hide_index=True)
+        st.caption("Daily deviations may ONLY use a listed alternate — never a wild reroute. "
+                   "The monthly network design sets the standard; the daily plan deviates within bounds.")
 
 # ------------------------------ Nightly KPIs ------------------------------
-with tabs[0]:
+with tabs[1]:
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Revenue", f"${k['revenue_usd']:,.0f}")
     c2.metric("Cost to serve", f"${k['cost_to_serve_usd']:,.0f}")
@@ -88,27 +155,6 @@ with tabs[0]:
     st.dataframe(comp, use_container_width=True)
     st.caption("Light day: utilization falls, cost/shipment rises, plan consolidates. "
                "Heavy day: directs cut handles to 2.12 and lift utilization to 85%.")
-
-# ------------------------------ Network ------------------------------
-with tabs[1]:
-    st.subheader("Terminals (nodes)")
-    st.dataframe(d["terminals"], use_container_width=True, hide_index=True)
-    st.subheader("Linehaul lanes (arcs) — cost/mile varies by domicile pay + demographics")
-    st.dataframe(d["lanes"], use_container_width=True, hide_index=True)
-    st.subheader("Design routes — the structured network: one standard path per OD x product")
-    prod = st.selectbox("Product", ["P", "E"],
-                        format_func=lambda p: "Priority (fast)" if p == "P" else "Economy (~1 day slower)")
-    st.dataframe(d["design_routes"][d["design_routes"]["product"] == prod]
-                 .drop(columns=["product"]), use_container_width=True, hide_index=True)
-    st.caption("Planners try to follow the standard path; deviations are cost-driven (see Deviations tab).")
-    st.subheader("Pre-approved alternate paths — the monthly design bounds daily execution")
-    alt_p = os.path.join(DATA, "alternate_paths.csv")
-    if os.path.exists(alt_p):
-        alt = pd.read_csv(alt_p)
-        st.dataframe(alt[alt["product"] == prod].drop(columns=["product"]),
-                     use_container_width=True, hide_index=True)
-        st.caption("Daily deviations may ONLY use a listed alternate — never a wild reroute. "
-                   "The monthly network design sets the standard; the daily plan deviates within bounds.")
 
 # ------------------------------ Load plan ------------------------------
 with tabs[2]:
@@ -246,8 +292,75 @@ with tabs[7]:
     st.caption("Planners pre-plan doors and trailers on the forecast using INFERRED cube "
                "(shippers don't provide cube). Dock dimming gives truth — too late to plan on.")
 
-# ------------------------------ Methodology ------------------------------
+# ------------------------------ Ontology & context ------------------------------
 with tabs[8]:
+    st.subheader("Context engineering: the layer everything else stands on")
+    st.markdown("""
+**Context engineering** is the discipline of giving every AI in the stack the same, complete,
+machine-readable picture of the operation — so the forecaster, the optimizer, and the explainer
+all reason from one shared truth instead of three private guesses.""")
+    st.subheader("What it is in this network")
+    st.markdown("""
+In this prototype the context layer is **`data/ontology.yaml`** plus **`data/DATA_DICTIONARY.md`**:
+a formal model of the freight world. It names the **entities** (Terminal, Lane, Product,
+DesignRoute, Shipment, LaneForecast, LinehaulActual, Turn, Deviation, CostToServe, TowerEvent,
+TowerAction), their **relationships** (a Turn runs on a Lane; a Deviation replaces a DesignRoute;
+a TowerAction responds to a TowerEvent), the **hard constraints** (pup cube/weight caps, product
+service windows, domiciled round trips, deviations only on pre-approved alternates), the
+**business rules** (deviate only when total cost improves; cube first; fill running turns before
+adding drivers), and the **metric definitions** (good vs bad mile, leg efficiency, handles/shipment).
+Nothing here is prose for humans — it is structured context machines can check against.""")
+    st.subheader("How it's set up")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("""
+**Built once, used everywhere:**
+1. Operators + data scientists write the rules down (the monthly design, service windows, cost levers).
+2. They are encoded as structured YAML + the data dictionary — versioned like code.
+3. `data_build/build.py` enforces them when generating the plan (deviations only on listed alternates, turns as round trips).
+4. The copilot receives them as ground truth in every prompt — it can quote a rule, never invent one.""")
+    with c2:
+        st.markdown("**The actual file — the whole context layer fits on one screen:**")
+        op = os.path.join(DATA, "ontology.yaml")
+        if os.path.exists(op):
+            with open(op) as f:
+                st.code(f.read(), language="yaml")
+    st.subheader("Its role in the stack")
+    st.graphviz_chart("""
+digraph {
+  rankdir=LR;
+  node [shape=box, style=filled, fillcolor=white];
+  ctx [label="Context\\n(ontology + data)", fillcolor=gold, shape=cylinder];
+  ml [label="ML\\n(forecast, cube inference)"];
+  or [label="OR\\n(plan, deviations, tower)"];
+  gen [label="GenAI\\n(explains, drafts, chats)"];
+  ctx -> ml [label="feature defs"];
+  ctx -> or [label="constraints"];
+  ctx -> gen [label="ground truth"];
+  ml -> or [label="demand + cube"];
+  or -> gen [label="decisions"];
+}""", use_container_width=True)
+    st.markdown("""
+- **ML** reads the context for feature definitions (what a Lane is, what a Product promises) so forecasts and cube inference speak the planner's language.
+- **OR** reads it as constraints — the optimizer cannot propose what the ontology forbids (no wild reroutes, no one-way turns).
+- **GenAI** reads it as ground truth — the copilot answers only from this context, citing lanes, dollars, and rules. If it can't be checked against the ontology, the model says so instead of guessing.""")
+    st.subheader("Why it matters")
+    p1, p2 = st.columns(2)
+    with p1:
+        st.markdown("""
+**For planners**
+- Tribal knowledge becomes explicit: the same rules apply on every shift, at every service center.
+- The tower's recommendations arrive pre-checked against the rules — no mental math to verify a cancel won't strand the return leg.
+- When a rule changes (new service window, new alternate), you edit one file, not retrain anyone's instincts.""")
+    with p2:
+        st.markdown("""
+**For executives**
+- **Auditability:** every dollar the copilot quotes traces to a CSV row and an ontology rule — nothing is a black box.
+- **Governance:** the LLM is fenced by design. It cannot invent a lane, a cost, or a policy because the context it sees is closed.
+- **Leverage:** the context layer is the durable asset. Models get swapped; the ontology compounds.""")
+
+# ------------------------------ Methodology ------------------------------
+with tabs[9]:
     st.subheader("Two planning horizons")
     st.markdown("""
 **Monthly network design** sets the structure: nodes, arcs, and one standard path per OD x product,
@@ -282,12 +395,14 @@ recommends add/cancel/reroute/dock actions. Every recommendation passes a **netw
 This is the intelligence the tower team shouldn't have to do in their heads.""")
     st.subheader("Conversational copilot (Ask the network)")
     st.markdown("""
-The **Ask the network** tab is a grounded GenAI layer: your LLM (OpenAI, Azure, or any OpenAI-compatible
-endpoint — bring your own key) answers planner questions using only this scenario's data: KPIs, deviations,
+The **Ask the network** tab is a grounded GenAI layer: your LLM (Anthropic Claude natively,
+or OpenAI / Azure / any OpenAI-compatible endpoint — bring your own key) answers planner questions
+using only this scenario's data: KPIs, deviations,
 tower events and their network checks, lane scoreboard, cost-to-serve, and the business rules above.
 Architecture: **context engineering** (ontology + data as the prompt's ground truth) → **ML** (forecasts,
 cube inference) → **OR** (the plan and tower engine) → **GenAI** (explains and converses). The key lives in
-the browser session / Streamlit secrets / env var — never in the repo.""")
+the browser session / Streamlit secrets / env var — never in the repo. See the **Ontology & context** tab
+for the full story on the context layer.""")
     st.subheader("Cube inference")
     st.markdown("""
 Shippers don't provide cube. The planner infers cube at pickup from the shipper's historical
@@ -304,27 +419,54 @@ implementation stack (Python, MIP, hierarchical lane forecast, density profiles 
 ML optimization proxy, LLM explainer).""")
 
 # ------------------------------ Ask the network ------------------------------
-with tabs[9]:
+with tabs[10]:
     st.subheader("Ask the network — conversational copilot")
     st.caption("Grounded in this scenario's data: KPIs, deviations, tower events, lane scoreboard, "
                "cost-to-serve. The model answers only from this context.")
 
+    st.info("**What is this page?** The copilot below needs a large language model to talk to. "
+            "This panel tells the app *which* model to use and holds *your* API key. Nothing is sent "
+            "anywhere except the provider you choose, and the model only ever sees this scenario's "
+            "data (the summary built below) — never your key, never anything else. "
+            "Pick it up and use it: paste a key once per session, or save it in Streamlit secrets "
+            "so it's always there.", icon="🔌")
+
     with st.expander("Connection (your key, your endpoint)", expanded=False):
+        provider = st.selectbox("Provider",
+                                ["Anthropic", "OpenAI-compatible"],
+                                help="Anthropic = the native Anthropic API (claude-...). "
+                                     "OpenAI-compatible = OpenAI, Azure OpenAI, or any compatible endpoint.")
+        st.session_state["llm_provider"] = provider
         key_in = st.text_input("API key", type="password",
                                help="Stored only in this browser session, never in the repo. "
-                                    "You can also set it via Streamlit secrets or the OPENAI_API_KEY env var.")
+                                    "You can also set it via Streamlit secrets (ANTHROPIC_API_KEY or "
+                                    "OPENAI_API_KEY) or the matching env var.")
         if key_in:
             st.session_state["llm_key"] = key_in
-        base_url = st.text_input("Base URL (OpenAI-compatible)",
-                                 value=st.session_state.get("llm_base", "https://api.openai.com/v1"))
-        st.session_state["llm_base"] = base_url
-        model = st.text_input("Model", value=st.session_state.get("llm_model", "gpt-4o-mini"))
-        st.session_state["llm_model"] = model
-        st.caption("Works with OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint.")
+        if provider == "OpenAI-compatible":
+            base_url = st.text_input("Base URL (OpenAI-compatible)",
+                                     value=st.session_state.get("llm_base", "https://api.openai.com/v1"))
+            st.session_state["llm_base"] = base_url
+            model = st.text_input("Model", value=st.session_state.get("llm_model", "gpt-4o-mini"))
+            st.session_state["llm_model"] = model
+            st.caption("Works with OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint.")
+        else:
+            model = st.text_input("Model", value=st.session_state.get("llm_model_a",
+                                                                     "claude-sonnet-4-20250514"),
+                                 help="Any Claude model your key can access.")
+            st.session_state["llm_model_a"] = model
+            st.caption("Uses the native Anthropic API. Set ANTHROPIC_API_KEY in Streamlit secrets "
+                       "(⋮ → Settings → Secrets) to keep it across sessions.")
 
-    api_key = (st.session_state.get("llm_key")
-               or st.secrets.get("OPENAI_API_KEY")
-               or os.environ.get("OPENAI_API_KEY"))
+    provider = st.session_state.get("llm_provider", "Anthropic")
+    if provider == "Anthropic":
+        api_key = (st.session_state.get("llm_key")
+                   or st.secrets.get("ANTHROPIC_API_KEY")
+                   or os.environ.get("ANTHROPIC_API_KEY"))
+    else:
+        api_key = (st.session_state.get("llm_key")
+                   or st.secrets.get("OPENAI_API_KEY")
+                   or os.environ.get("OPENAI_API_KEY"))
 
     def _ctx():
         L = [f"Scenario {scenario} ({k['date']}): {k['shipments']} shipments, "
@@ -403,7 +545,8 @@ with tabs[9]:
             st.markdown(q)
         if not api_key:
             msg = ("No API key configured — open **Connection** above and paste your key "
-                   "(it stays in this session only), or set `OPENAI_API_KEY` in Streamlit secrets / env.")
+                   "(it stays in this session only), or set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` "
+                   "in Streamlit secrets / env.")
             with st.chat_message("assistant"):
                 st.warning(msg)
             st.session_state["chat"].append({"role": "assistant", "content": msg})
@@ -411,24 +554,34 @@ with tabs[9]:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking…"):
                     try:
-                        from openai import OpenAI
-                        client = OpenAI(api_key=api_key,
-                                        base_url=st.session_state.get("llm_base",
-                                                                     "https://api.openai.com/v1"))
                         hist = [{"role": m["role"], "content": m["content"]}
                                 for m in st.session_state["chat"][-10:]]
-                        resp = client.chat.completions.create(
-                            model=st.session_state.get("llm_model", "gpt-4o-mini"),
-                            messages=[{"role": "system", "content": SYSTEM}] + hist,
-                            temperature=0.2, max_tokens=800)
-                        ans = resp.choices[0].message.content
+                        if provider == "Anthropic":
+                            from anthropic import Anthropic
+                            client = Anthropic(api_key=api_key)
+                            resp = client.messages.create(
+                                model=st.session_state.get("llm_model_a",
+                                                           "claude-sonnet-4-20250514"),
+                                max_tokens=800, temperature=0.2,
+                                system=SYSTEM, messages=hist)
+                            ans = resp.content[0].text
+                        else:
+                            from openai import OpenAI
+                            client = OpenAI(api_key=api_key,
+                                            base_url=st.session_state.get("llm_base",
+                                                                         "https://api.openai.com/v1"))
+                            resp = client.chat.completions.create(
+                                model=st.session_state.get("llm_model", "gpt-4o-mini"),
+                                messages=[{"role": "system", "content": SYSTEM}] + hist,
+                                temperature=0.2, max_tokens=800)
+                            ans = resp.choices[0].message.content
                     except Exception as e:
                         ans = f"Couldn't reach the model: {e}"
                     st.markdown(ans)
             st.session_state["chat"].append({"role": "assistant", "content": ans})
 
 # ------------------------------ Data downloads ------------------------------
-with tabs[10]:
+with tabs[11]:
     st.subheader("Download the sample data")
     for name in ["terminals", "lanes", "design_routes", "shippers", "shipments",
                  "forecast_lane", "linehaul_actuals", "deviations",
