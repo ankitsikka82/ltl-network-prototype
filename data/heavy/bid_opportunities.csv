@@ -1,0 +1,4 @@
+opp_id,lane,direction,cycle,action,detail,bid_early,bid_cut,pups_early,pups_cut,drivers_now,drivers_merged,turns_saved_lane,saving_usd,priority_in_early,service_check,service_note
+CUT-MKC>LIT,LIT-MKC,MKC>LIT,outbound,merge early bid into cut,Shift the 17:00 bid's freight onto the 21:00 cut on MKC>LIT,17:00,21:00,1,1,2,1,1,1365.0,Y,REVIEW,cut dep 21:00 + 7.0h drive -> 0.0h sort slack at LIT; Priority freight loses sort/delivery slack
+CUT-SGF>LIT,LIT-SGF,SGF>LIT,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on SGF>LIT,9:00,12:00,1,1,2,1,1,1560.0,N,OK,"cut dep 12:00 + 8.0h drive -> arrive 20.0:00, 16.0h before next-day 12:00 commit"
+CUT-MKC>STL,MKC-STL,MKC>STL,outbound,merge early bid into cut,Shift the 17:00 bid's freight onto the 21:00 cut on MKC>STL,17:00,21:00,1,1,2,1,1,975.0,Y,REVIEW,cut dep 21:00 + 5.0h drive -> 2.0h sort slack at STL; Priority freight loses sort/delivery slack

@@ -23,7 +23,8 @@ def load_scenario(scenario):
     base = os.path.join(DATA, scenario)
     for name in ["terminals", "lanes", "design_routes", "shippers", "shipments",
                  "forecast_lane", "linehaul_actuals", "deviations",
-                 "cost_to_serve", "lane_scoreboard", "tower_events", "tower_actions"]:
+                 "cost_to_serve", "lane_scoreboard", "tower_events", "tower_actions",
+                 "bids", "bid_opportunities"]:
         p = os.path.join(base, name + ".csv")
         d[name] = pd.read_csv(p) if os.path.exists(p) else pd.DataFrame()
     with open(os.path.join(base, "kpis.json")) as f:
@@ -47,8 +48,8 @@ k = d["kpis"]
 st.sidebar.caption("All figures are illustrative sample data, not carrier operating data.")
 
 st.title("LTL Network Planning Prototype")
-st.caption(f"Operating day {k['date']} · 5-terminal cluster (SGF breakbulk hub; STL, MKC, MEM, TUL) · "
-           f"scenario: {scenario}")
+st.caption(f"Operating day {k['date']} · hub-and-spoke: SGF + MEM breakbulk hubs "
+           f"(spokes STL/TUL, MKC/LIT) · scenario: {scenario}")
 
 tabs = st.tabs(["Start here", "Network", "Nightly KPIs", "Load plan", "Deviations",
                 "Control tower", "Cost to serve", "Lane scoreboard",
@@ -91,7 +92,7 @@ digraph {
     with r2:
         st.markdown("**ML — predicts**\n\nLane-level demand forecasts and pickup cube inference (shippers don't provide cube; density profiles infer it). Used *only* where prediction beats a rule — never for decisions.")
     with r3:
-        st.markdown("**OR — decides**\n\nThe nightly plan, cost-driven deviations, and tower recommendations. Minimizes driver turns + dock handles subject to hard constraints. Math, not vibes — every move is auditable.")
+        st.markdown("**OR — decides**\n\nThe nightly plan, bid schedules, cut-time optimization, cost-driven deviations, and tower recommendations. Minimizes driver turns + dock handles subject to hard constraints. Math, not vibes — every move is auditable.")
     with r4:
         st.markdown("**GenAI — explains**\n\nThe copilot answers questions and drafts service-center messages, grounded *only* on optimizer outputs + the ontology. It never decides and never invents a number — if it can't check it, it says so.")
     st.subheader("Business architecture — three horizons, one network")
@@ -101,7 +102,7 @@ digraph {
     with b2:
         st.markdown("**Daily — execution**\n\nStart from the standard plan. Deviate *only* onto a pre-approved alternate, *only* when total network cost (turns + handles) improves. Cube first, fewest drivers, fewest touches.")
     with b3:
-        st.markdown("**Intraday — control tower**\n\nCentral watches volume at 10:00 / 14:00 / 18:00, projects turns vs plan, and recommends add / cancel / reroute / dock moves — each network-checked, because a turn is a round trip.")
+        st.markdown("**Intraday — control tower**\n\nCentral watches volume at 10:00 / 14:00 / 18:00, projects turns vs plan, and recommends add / cancel / reroute / dock / cut-time moves — each network-checked, because a turn is a round trip.")
     st.subheader("Tech architecture — what runs where")
     st.markdown("""
 `data_build/build.py` (deterministic, seeded) generates the sample world → CSVs + `ontology.yaml` →
@@ -111,12 +112,16 @@ scenario's data. Swap the CSVs for real feeds and the heuristic for a MIP solver
 doesn't change.""")
     st.subheader("Guided demo — five steps, about ten minutes")
     st.markdown("""
-**1. Network** — the playing field. Press ▶ and watch a Priority shipment ride STL → SGF → MEM.
-Note the gold breakbulk hub: that's where handles happen, and handles cost money. Toggle the relay
-overlay: blue diamonds are driver-swap points on long lanes — the trailer keeps rolling while drivers
-stay within hours-of-service. Freight path and driver path are two different things.
-**2. Nightly KPIs + Load plan** — the plan the optimizer built: 22 driver turns, 79.8% cube, $137k cost to serve. Open the load plan and see turns as pairs of pups — some running empty, because the driver comes home either way.
-**3. Deviations** — nine times the plan beat the standard path, saving $5,847. Heavy via-hub flows went direct (fewer handles); light directs consolidated via hub (more density).
+**1. Network** — the playing field. Press ▶ and watch a Priority shipment ride TUL → SGF → MEM → MKC:
+spoke to hub, hub to hub, hub to spoke. Note the two gold breakbulk hubs: that's where handles happen,
+and handles cost money. Toggle the relay overlay: blue diamonds are driver-swap points on long lanes —
+the trailer keeps rolling while drivers stay within hours-of-service. A relay point can be a full
+center or just a meet point; the freight path and the driver path are two different things.
+**2. Nightly KPIs + Load plan** — the plan the optimizer built: 29 driver turns, 76.0% cube, $158k cost
+to serve. Open the load plan and see **bid departures** — drivers leave on bid times (17:00 / 21:00
+outbound, 09:00 / 12:00 AM), and the cut-time opportunities show where shifting a cut to a later bid
+saves a whole driver shift. Some pups run empty, because the driver comes home either way.
+**3. Deviations** — seven times the plan beat the standard path, saving $7,238. Heavy via-hub flows went direct (fewer handles); light bypasses consolidated via hub (more density).
 **4. Control tower** — the day goes off-plan at 10:00. Read the **move of the day**: the cancel the agent *blocked*, and why. Then open the **what-if simulator** and surge a lane yourself — watch the same network check work your scenario.
 **5. Ask the network** — interrogate it. It can only answer from the data: lanes, turns, dollars, rules.
 *Short on time? Do 1, 4, and 5 — that's the whole thesis in three minutes.*""")
@@ -192,10 +197,25 @@ hours — that's a driver-path decision, not a freight deviation, and it costs n
         st.caption("Prototype costs the lane at its blended $/mi (turn = 2 × miles × $/mi). "
                    "Production prices each relay leg at its own domicile's $/mi.")
 
+    st.subheader("Operating cycles — the rhythm of the night")
+    st.markdown("""
+The linehaul day runs in three cycles. Every directed lane belongs to exactly one cycle per night:
+
+- **Outbound 12:00–21:00** — spokes dispatch to their hubs (STL→SGF, TUL→SGF, MKC→MEM, LIT→MEM),
+  plus the SGF→MEM hub-to-hub move. Bid departures at **17:00** and the **21:00 cut**.
+- **Hub sort 21:00–05:00** — breakbulks cross-dock. No scheduled linehaul; this is where handles happen.
+- **AM 05:00–12:00** — hubs dispatch to spokes (SGF→STL, SGF→TUL, MEM→MKC, MEM→LIT),
+  plus the MEM→SGF hub-to-hub return. Bid departures at **09:00** and the **12:00 cut**.
+
+Drivers bid on start times: each bid departure that carries freight needs its own drivers —
+one driver pulls two pups. Day-to-day volume decides how many drivers each bid needs; the
+*cut-time optimizer* (Load plan tab) finds bids whose freight could ride a later cut with
+fewer drivers.""")
+
     st.subheader("Watch a shipment move")
-    st.caption("A Priority shipment STL → MEM rides the standard path STL → SGF → MEM. "
-               "Press play to animate it across the map.")
-    legs = ["STL>SGF", "SGF>MEM"]
+    st.caption("A Priority shipment TUL → MKC rides the standard path TUL → SGF → MEM → MKC: "
+               "spoke to hub, hub to hub, hub to spoke. Press play to animate it across the map.")
+    legs = ["TUL>SGF", "SGF>MEM", "MEM>MKC"]
     if st.button("▶ Play shipment flow"):
         ph = st.empty()
         ph.graphviz_chart(_network_dot(show_relay=show_relay), use_container_width=True)
@@ -205,8 +225,12 @@ hours — that's a driver-path decision, not a freight deviation, and it costs n
             ph.graphviz_chart(_network_dot(set(legs[:i + 1]), show_relay=show_relay),
                               use_container_width=True)
         _t.sleep(0.6)
-        st.success("STL → SGF → MEM: two handles (one cross-dock at SGF), path miles ≈ "
-                   f"{int(d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','STL'),'miles'] + d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','MEM'),'miles'])}.")
+        _lm = d["lanes"].set_index(["terminal_a", "terminal_b"])["miles"]
+        _mi = (int(_lm.loc[("SGF", "TUL")]) + int(_lm.loc[("SGF", "MEM")])
+               + int(_lm.loc[("MEM", "MKC")]))
+        st.success(f"TUL → SGF → MEM → MKC: cross-docks at two hubs, path miles ≈ {_mi}. "
+                   "The SGF → MEM leg is relayed — drivers swap at the midpoint, the freight "
+                   "never touches the dock.")
 
     st.subheader("Terminals (nodes)")
     st.dataframe(d["terminals"], use_container_width=True, hide_index=True)
@@ -274,13 +298,49 @@ with tabs[3]:
     def _row(s):
         return ("background-color: #3a2b2b" if s["empty"] else
                 "background-color: #2b3a2b" if s["cube_util_pct"] >= 70 else "")
-    cols = ["load_id", "lane", "direction", "turn_no", "trailer_no", "cube_cuft",
-            "cube_util_pct", "empty", "flows"]
+    cols = ["load_id", "lane", "direction", "bid_id", "depart_time", "turn_no", "trailer_no",
+            "cube_cuft", "cube_util_pct", "empty", "flows"]
     st.dataframe(loads[cols].style.apply(lambda r: [_row(r)] * len(cols), axis=1),
                  use_container_width=True, hide_index=True)
-    st.caption("Each turn = one driver with two pups (turn_no groups them). The driver goes home "
+    st.caption("Each turn = one driver with two pups (turn_no groups them within a bid). Drivers leave on "
+               "bid departures — 17:00 / 21:00 cut outbound, 09:00 / 12:00 cut AM. The driver goes home "
                "with two pups whether full or empty, so an empty pup's marginal cost is ~$0 — "
                "the waste is density, which is why cube comes first in the optimizer.")
+
+    st.subheader("Bid schedule — who leaves when")
+    bids = d["bids"]
+    st.dataframe(bids, use_container_width=True, hide_index=True)
+    st.caption("First-leg freight becomes available across the cycle as pickups complete, so it splits "
+               "across bids; transfer freight (already at the hub) rides the first bid. Each bid with "
+               "freight needs its own drivers: ceil(pups / 2).")
+
+    st.subheader("Cut-time opportunities — the optimizer's bid-level findings")
+    st.markdown("""
+**Idea:** when freight is thin across two bids, one later departure can do the work of two —
+*shift the cut* and save a driver shift. The optimizer checks every directed lane: if merging the
+early bid into the cut bid needs fewer drivers **and** the lane still staffs fewer round trips,
+that's a structural opportunity (monthly-design level). The same math runs day-of in the
+simulator, where a light-volume day can cancel a bid that the design keeps.""")
+    opps = d["bid_opportunities"]
+    if opps.empty:
+        st.info("No structural cut-time opportunities in this scenario — the bid schedule is already tight.")
+    else:
+        def _svc(s):
+            return ("background-color: #2b3a2b" if s["service_check"] == "OK"
+                    else "background-color: #3a2f2b")
+        ocols = ["opp_id", "direction", "cycle", "detail", "pups_early", "pups_cut",
+                 "drivers_now", "drivers_merged", "turns_saved_lane", "saving_usd",
+                 "priority_in_early", "service_check"]
+        st.dataframe(opps[ocols].style.apply(lambda r: [_svc(r)] * len(ocols), axis=1),
+                     use_container_width=True, hide_index=True)
+        st.metric("Total structural cut-time savings", f"${opps['saving_usd'].sum():,.0f}",
+                  f"{int(opps['turns_saved_lane'].sum())} driver shifts")
+        with st.expander("Service check details"):
+            for _, o in opps.iterrows():
+                st.write(f"**{o['opp_id']}** ({o['service_check']}): {o['service_note']}")
+    st.caption("OK = Priority freight keeps its sort/delivery slack. REVIEW = the merge pushes Priority "
+               "freight later — a planner decision, with the tradeoff priced. Nothing here moves freight "
+               "without the service math attached.")
 
 # ------------------------------ Deviations ------------------------------
 with tabs[4]:
@@ -338,14 +398,20 @@ with tabs[5]:
 
     # ---- What-if simulator ----
     st.subheader("What-if simulator — you be the tower")
-    st.caption("Pick a lane and shock its volume. The simulator runs the *same rules* as the nightly "
-               "engine: turns = ceil(max pups either way / 2) · turn cost = 2 × miles × $/mi · "
-               "reroutes only onto pre-approved alternates with spare pup slots · a cancel must leave "
-               "room in BOTH directions.")
+    st.caption("Pick a lane direction and shock its volume. The simulator runs the *same rules* as the "
+               "nightly engine, now bid-aware: each bid's freight needs ceil(pups/2) drivers · a direction "
+               "staffs the sum of its bids · the lane staffs the max of its directions (domiciled round "
+               "trips) · turn cost = 2 × miles × $/mi · reroutes only onto pre-approved alternates with "
+               "spare pup slots · a cancel must leave room in BOTH directions · a cut-shift merges two "
+               "thin bids into one departure.")
     loads = d["linehaul_actuals"]
-    pups_dir = loads.groupby(["lane", "direction"]).size()
-    pups_lane = loads.groupby("lane").size()
-    turns_lane = loads.groupby("lane")["turn_no"].max()
+    loaded = loads[~loads["empty"]]
+    bids = d["bids"]
+    opps = d["bid_opportunities"]
+    pups_dir = loaded.groupby(["lane", "direction"]).size()
+    pups_lane = loaded.groupby("lane").size()
+    turns_dir = loads.groupby(["lane", "direction"])["turn_no"].max().fillna(0).astype(int)
+    turns_lane = turns_dir.groupby("lane").max()
     # lane lookup by unordered endpoint pair -> {miles, cpm, disp (plan lane string)}
     # (lane_scoreboard carries miles + $/mi for every lane in the plan, incl. deviation directs)
     lane_lookup = {}
@@ -355,33 +421,57 @@ with tabs[5]:
                             "disp": l["lane"]}
     def _lane_of(a, b):
         return lane_lookup[frozenset([a, b])]
-    dirs = sorted(loads["direction"].unique())
+    dirs = sorted(loaded["direction"].unique())
     sim_dir = st.selectbox("Lane direction", dirs, index=dirs.index("SGF>MEM") if "SGF>MEM" in dirs else 0)
     delta = st.slider("Volume change on this direction", -100, 100, 40, 5,
                       format="%d%%", help="Positive = surge, negative = shortfall. "
                       "-100% means the direction goes to zero.")
     a, b = sim_dir.split(">")
+    rev = f"{b}>{a}"
     info = _lane_of(a, b)
     lane_disp, miles, cpm = info["disp"], info["miles"], info["cpm"]
     p_out = int(pups_dir.get((lane_disp, sim_dir), 0))
-    p_in = int(pups_dir.get((lane_disp, f"{b}>{a}"), 0))
-    planned = int(turns_lane.get(lane_disp, 0))
+    p_in = int(pups_dir.get((lane_disp, rev), 0))
+    # the plan's bid split for this direction (first-leg freight spreads across bids)
+    bb = bids[(bids["lane"] == lane_disp) & (bids["direction"] == sim_dir)].sort_values("depart_time")
+    f1 = (bb.iloc[0]["pups"] / max(1, bb["pups"].sum())) if not bb.empty else 0.6
+    planned_dir = int(turns_dir.get((lane_disp, sim_dir), 0))
+    planned_other = int(turns_dir.get((lane_disp, rev), 0))
+    planned_lane = max(planned_dir, planned_other)
     new_out = max(0, round(p_out * (1 + delta / 100)))
     import math as _m
-    need = _m.ceil(max(new_out, p_in) / 2) if max(new_out, p_in) > 0 else 0
-    gap = need - planned
+    def _drivers(p):
+        return _m.ceil(p / 2) if p > 0 else 0
+    if new_out == 0:
+        d_new_dir, p1n, p2n = 0, 0, 0
+    else:
+        p1n = round(new_out * f1)
+        p2n = new_out - p1n
+        d_new_dir = _drivers(p1n) + _drivers(p2n)
+    need_lane = max(d_new_dir, planned_other)
+    gap = need_lane - planned_lane
     turn_cost = 2 * miles * cpm
     DOCK = 14.0
-    st.write(f"**Now:** {p_out} pups {sim_dir} / {p_in} pups {b}>{a} → {planned} planned turns "
-             f"(turn = ${turn_cost:,.0f}). **After {delta:+d}%:** {new_out} pups → **{need} turns needed** "
-             f"(gap {gap:+d}).")
+    # cut-shift: what if the shocked direction's bids merged into the cut departure?
+    cut_save, cut_note, cut_svc = 0, "", ""
+    if new_out > 0 and len(bb) == 2:
+        merged_d = _drivers(new_out)
+        if merged_d < d_new_dir and max(merged_d, planned_other) < need_lane:
+            cut_save = need_lane - max(merged_d, planned_other)
+            m = opps[opps["direction"] == sim_dir]
+            cut_svc = m.iloc[0]["service_check"] if not m.empty else "REVIEW"
+            cut_note = (f"merge the {bb.iloc[0]['depart_time']} bid into the "
+                        f"{bb.iloc[1]['depart_time']} cut on {sim_dir}")
+    st.write(f"**Now:** {p_out} pups {sim_dir} / {p_in} pups {rev} → {planned_lane} lane turns "
+             f"({planned_dir} departures {sim_dir} + {planned_other} {rev}; turn = ${turn_cost:,.0f}). "
+             f"**After {delta:+d}%:** {new_out} pups → **{need_lane} turns needed** (gap {gap:+d}).")
     if miles > 250:
         st.caption(f"🔁 Relay lane ({miles} mi > ~250 mi): each lane-turn = 2 relay-leg turns "
                    f"(~{miles // 2} mi each, drivers swap at midpoint, freight never touches the dock). "
                    f"A cancel here frees one driver at each domicile.")
     verdict, detail, impact = None, "", 0.0
     if gap > 0:
-        overflow = new_out - planned * 2
+        overflow = new_out - planned_dir * 2
         # candidate ODs whose standard path uses this leg -> pre-approved alternate w/ spare slots
         dr = d["design_routes"]
         cand = dr[dr["standard_path"].str.contains(sim_dir, regex=False)]
@@ -397,7 +487,11 @@ with tabs[5]:
             legs = [(legs[i], legs[i + 1]) for i in range(len(legs) - 1)]
             spare, ok = 0, True
             for x, y in legs:
-                lk = _lane_of(x, y)["disp"]
+                key = frozenset([x, y])
+                if key not in lane_lookup:
+                    ok = False  # alternate leg not in the plan -> cannot absorb (build.py rule)
+                    break
+                lk = lane_lookup[key]["disp"]
                 if lk not in turns_lane.index:
                     ok = False
                     break
@@ -425,17 +519,17 @@ with tabs[5]:
                        f"Add {gap} driver turn(s) on {sim_dir}: +${cost:,.0f}. Protects on-time; "
                        f"covers the surge cube.")
     elif gap < 0:
-        # cancel check: remaining turns must cover BOTH directions (build.py rule)
-        keep = planned + gap
-        if _m.ceil(max(new_out, p_in) / 2) <= keep:
+        # cancel check (build.py rule): the shocked direction drops to d_new_dir departures and the
+        # lane staffs need_lane domiciled round trips; those must still cover the return leg's pups
+        if p_in <= need_lane * 2:
             save = -gap * turn_cost
-            verdict = ("CANCEL", "network-OK: remaining turns cover projected pups in BOTH directions "
-                       "(turn is a round trip)", -save,
+            verdict = ("CANCEL", "network-OK: remaining round trips cover projected pups in BOTH directions",
+                       -save,
                        f"Cancel {-gap} turn(s) on {lane_disp}: −${save:,.0f}. Consolidate remaining "
-                       f"freight onto running turns.")
+                       f"freight onto running turns; the return leg still rides the round trips.")
         else:
             verdict = ("KEEP", f"BLOCKED: cancelling looks like a ${-gap * turn_cost:,.0f} local saving, "
-                       f"but the return direction still needs the pups — the turn is a round trip",
+                       f"but the return direction still needs the pups — drivers are domiciled round trips",
                        0.0,
                        "Do NOT cancel. A local saving that strands return-leg freight is worse for the network.")
     else:
@@ -453,10 +547,15 @@ with tabs[5]:
     st.write(f"**Network check:** {netchk}")
     st.write(f"**Cost impact:** ${impact:+,.0f} · **Service:** "
              f"{'protects on-time; covers surge cube' if gap > 0 else 'no service risk at projected volume' if gap < 0 else 'none'}")
+    if cut_save > 0:
+        st.warning(f"**Alternative: SHIFT CUT** — {cut_note}: saves {cut_save} driver shift(s) "
+                   f"(−${cut_save * turn_cost:,.0f}); service check **{cut_svc}**. "
+                   "Same math as the structural cut-time opportunities, applied to today's volume "
+                   "instead of the monthly design — the day-of version of the same lever.")
     if st.button("💬 Ask the copilot about this simulation", key="ask_sim"):
         st.session_state["pending_q"] = (
             f"What-if: volume on {sim_dir} changes {delta:+d}% (pups {p_out} → {new_out}, "
-            f"planned turns {planned}, needed {need}). The simulator recommends {label}: {rec} "
+            f"planned lane turns {planned_lane}, needed {need_lane}). The simulator recommends {label}: {rec} "
             f"Network check: {netchk} Cost impact ${impact:+,.0f}. "
             f"Explain whether you agree and what Central should tell the service center.")
         st.info("Question queued — open the **Ask the network** tab and it will ask automatically.")
@@ -534,11 +633,15 @@ with tabs[7]:
                     "bad miles": ":red_circle:"}
     sb["flag"] = sb["verdict"].map(verdict_icon)
     st.dataframe(sb[["flag", "lane", "direction", "miles", "cost_per_mile_usd",
-                     "turns", "cube_util_pct", "leg_cost_usd",
-                     "cost_per_cube_mile_usd", "verdict"]],
+                     "drivers_this_dir", "turns", "cube_util_pct", "leg_cost_usd",
+                     "cost_per_cube_mile_usd", "verdict"]]
+                 .rename(columns={"drivers_this_dir": "drivers (this dir)",
+                                   "turns": "lane turns"}),
                  use_container_width=True, hide_index=True)
     st.caption("Leg efficiency = allocated leg cost / (cube x miles). "
-               "Good miles: >=70% cube on a needed lane. Bad miles: empty or <40%.")
+               "Drivers (this dir) = bid departures staffed that way; lane turns = max of both "
+               "directions (domiciled round trips). Good miles: >=70% cube on a needed lane. "
+               "Bad miles: empty or <40%.")
 
 # ------------------------------ Forecast vs actual ------------------------------
 with tabs[8]:
@@ -631,16 +734,32 @@ direct (fewer handles), light direct flows consolidate via hub (more density).""
     st.subheader("Doubles economics — the driver turn is the cost unit")
     st.markdown("""
 One driver pulls **two pups** out and brings **two pups** back, full or empty — and the turn costs the
-same either way. So the optimizer minimizes **driver turns**, not trailers: `turns = ceil(max(pups each
-way) / 2)`. Cube utilization is the dominant lever because filling the second pup on a running turn is
-nearly free, while dispatching another driver is the most expensive thing in the network. Imbalance shows
-up as **empty pup slots** (not empty miles): the driver comes home regardless.""")
+same either way. Drivers leave on **scheduled bid departures** (outbound: 17:00 and the 21:00 cut;
+AM: 09:00 and the 12:00 cut), and each bid that carries freight needs its own drivers:
+`drivers(bid) = ceil(pups_in_bid / 2)`. A direction staffs the sum of its bids; the lane staffs the
+max of its directions, because drivers are domiciled round trips.
+So the optimizer minimizes **driver turns**, not trailers — and the scarcest turn is often the one
+with a single pup in it. Cube utilization is the dominant lever because filling the second pup on a
+running turn is nearly free, while dispatching another driver is the most expensive thing in the network.
+Imbalance shows up as **empty pup slots** (not empty miles): the driver comes home regardless.""")
+    st.subheader("Operating cycles and cut-time optimization")
+    st.markdown("""
+The night runs in three cycles: **outbound 12:00–21:00** (spokes dispatch to hubs), **hub sort 21:00–05:00**
+(breakbulks cross-dock, no scheduled linehaul), **AM 05:00–12:00** (hubs dispatch to spokes). When freight
+is thin across a cycle's two bids, one departure can do the work of two: merge the early bid into the
+**cut** and save a driver shift. The optimizer tests every directed lane for this and recommends
+**SHIFT CUT** only if the lane's round-trip staffing actually declines **and** Priority freight keeps its
+service slack (otherwise flagged REVIEW, tradeoff priced, planner decides). The same lever runs
+structurally (monthly design, Load plan tab) and day-specifically (today's volume, what-if simulator).""")
     st.subheader("The math model")
     st.markdown("""
-**Decide:** path per OD-product flow (standard / pre-approved alternate) · driver turns per lane (integer) · pup assignments
+**Decide:** path per OD-product flow (standard / pre-approved alternate) · bid staffing
+(drivers per scheduled departure) · driver turns per lane (integer) · pup assignments
 **Minimize:** `sum(turns x turn_cost) + sum(handles x dock_cost)`
 **Subject to:** pup cube (1750 cu ft) + weight caps · product service windows (P: ≤2 legs/600 mi; E: ≤2 legs) ·
-domiciled round trips — `turns = ceil(max(pups_AB, pups_BA)/2)`, equipment balances because drivers come home ·
+domiciled round trips — `turns(direction) = sum over bids of ceil(pups_bid/2)`,
+`turns(lane) = max(turns_AB, turns_BA)`, equipment balances because drivers come home ·
+cut-time shifts never sacrifice product/service feasibility ·
 deviations restricted to the pre-approved alternate set · flow conservation at the breakbulk.
 **Method (prototype):** transparent greedy deviation search from the standard-path start — every move auditable.
 Production path: network MIP (Gurobi / OR-Tools) or a learned optimization proxy.""")
@@ -691,9 +810,11 @@ so you can see the planning gap.""")
     st.subheader("Ontology / context engineering")
     st.markdown("""
 `data/ontology.yaml` is the machine-readable context layer: entities (Terminal, Lane, Shipment, Turn,
-Deviation, CostToServe…), relationships, hard constraints, planner business rules, metric definitions
+OperatingCycle, Bid, CutTime, ServiceSlack, BidConsolidationOpportunity, Deviation, CostToServe…),
+relationships, hard constraints (including: a cut-time shift may never sacrifice service feasibility),
+planner business rules (including the cut-shift rule and bid consolidation), metric definitions
 (good vs bad mile, leg efficiency), the GenAI roles (plan explainer, deviation justifier, cost-to-serve
-narrator, exception copilot, C-suite briefer — all grounded on optimizer outputs), and the
+narrator, cut-time advisor, exception copilot, C-suite briefer — all grounded on optimizer outputs), and the
 implementation stack (Python, MIP, hierarchical lane forecast, density profiles refreshed from dimming,
 ML optimization proxy, LLM explainer).""")
 
@@ -774,6 +895,16 @@ with tabs[11]:
             L.append("Tower recommendations: " +
                      "; ".join(f"{r['action_type']} ({r['detail'][:80]}); network check: {r['network_check'][:100]}"
                                for _, r in ac.iterrows()))
+        opps = d["bid_opportunities"]
+        if not opps.empty:
+            L.append("Cut-time opportunities (merge an early bid into the cut departure): " +
+                     "; ".join(f"{r['opp_id']} {r['direction']}: {r['detail']} saves "
+                               f"{int(r['turns_saved_lane'])} turn(s) ${r['saving_usd']:,.0f}, "
+                               f"service check {r['service_check']}"
+                               for _, r in opps.iterrows()))
+        L.append("Operating cycles: outbound 12:00-21:00 (bids 17:00, 21:00 cut), hub sort 21:00-05:00, "
+                 "AM 05:00-12:00 (bids 09:00, 12:00 cut). turns(direction) = sum over bids of "
+                 "ceil(pups_in_bid/2); turns(lane) = max over directions (domiciled round trips).")
         sb = d["lane_scoreboard"].sort_values("cost_per_cube_mile_usd", ascending=False).head(5)
         L.append("Most expensive legs ($/cube-mile): " +
                  "; ".join(f"{r['lane']} {r['direction']}: ${r['cost_per_cube_mile_usd']:.4f} "
@@ -864,7 +995,8 @@ with tabs[12]:
     st.subheader("Download the sample data")
     for name in ["terminals", "lanes", "design_routes", "shippers", "shipments",
                  "forecast_lane", "linehaul_actuals", "deviations",
-                 "cost_to_serve", "lane_scoreboard", "tower_events", "tower_actions"]:
+                 "cost_to_serve", "lane_scoreboard", "tower_events", "tower_actions",
+                 "bids", "bid_opportunities"]:
         p = os.path.join(DATA, scenario, name + ".csv")
         if os.path.exists(p):
             with open(p, "rb") as f:

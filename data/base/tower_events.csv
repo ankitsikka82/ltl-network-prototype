@@ -1,12 +1,6 @@
 event_id,checkpoint,lane,direction,planned_turns,projected_turns,gap_turns,trigger
-E001,10:00,MEM-SGF,MEM>SGF,2,1,-1,volume shortfall
-E002,10:00,MEM-SGF,SGF>MEM,2,3,1,volume surge
-E003,10:00,MKC-TUL,MKC>TUL,2,1,-1,volume shortfall
-E004,14:00,MKC-SGF,SGF>MKC,2,3,1,volume surge
-E005,14:00,MKC-TUL,MKC>TUL,2,1,-1,volume shortfall
-E006,14:00,SGF-STL,SGF>STL,2,3,1,volume surge
-E007,18:00,MEM-SGF,MEM>SGF,2,1,-1,volume shortfall
-E008,18:00,MEM-STL,MEM>STL,2,1,-1,volume shortfall
-E009,18:00,MKC-TUL,MKC>TUL,2,1,-1,volume shortfall
-E010,18:00,SGF-STL,SGF>STL,2,3,1,volume surge
-E011,18:00,SGF-STL,STL>SGF,2,1,-1,volume shortfall
+E001,10:00,MEM-SGF,SGF>MEM,4,5,1,volume surge
+E002,10:00,SGF-STL,SGF>STL,3,4,1,volume surge
+E003,10:00,SGF-TUL,TUL>SGF,2,3,1,volume surge
+E004,14:00,MEM-SGF,SGF>MEM,4,5,1,volume surge
+E005,14:00,SGF-TUL,TUL>SGF,2,3,1,volume surge

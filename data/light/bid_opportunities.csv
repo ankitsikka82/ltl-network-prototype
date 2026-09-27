@@ -1,0 +1,7 @@
+opp_id,lane,direction,cycle,action,detail,bid_early,bid_cut,pups_early,pups_cut,drivers_now,drivers_merged,turns_saved_lane,saving_usd,priority_in_early,service_check,service_note
+CUT-MEM>LIT,LIT-MEM,MEM>LIT,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on MEM>LIT,9:00,12:00,3,1,3,2,1,499.5,Y,OK,"cut dep 12:00 + 2.7h drive -> arrive 14.7:00, 2.3h before 17:00 commit"
+CUT-MKC>MEM,MEM-MKC,MKC>MEM,outbound,merge early bid into cut,Shift the 17:00 bid's freight onto the 21:00 cut on MKC>MEM,17:00,21:00,3,3,4,3,1,1365.0,Y,REVIEW,cut dep 21:00 + 7.0h drive -> 0.0h sort slack at MEM; Priority freight loses sort/delivery slack
+CUT-MEM>SGF,MEM-SGF,MEM>SGF,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on MEM>SGF,9:00,12:00,5,1,4,3,1,1111.5,Y,OK,"cut dep 12:00 + 5.7h drive -> arrive 17.7:00, 18.3h before next-day 12:00 commit"
+CUT-MEM>STL,MEM-STL,MEM>STL,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on MEM>STL,9:00,12:00,1,1,2,1,1,1170.0,Y,OK,"cut dep 12:00 + 6.0h drive -> arrive 18.0:00, 18.0h before next-day 12:00 commit"
+CUT-SGF>MKC,MKC-SGF,SGF>MKC,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on SGF>MKC,9:00,12:00,1,1,2,1,1,1365.0,Y,OK,"cut dep 12:00 + 7.0h drive -> arrive 19.0:00, 17.0h before next-day 12:00 commit"
+CUT-SGF>TUL,SGF-TUL,SGF>TUL,am,merge early bid into cut,Shift the 9:00 bid's freight onto the 12:00 cut on SGF>TUL,9:00,12:00,3,1,3,2,1,648.0,Y,OK,"cut dep 12:00 + 3.6h drive -> arrive 15.6:00, 1.4h before 17:00 commit"

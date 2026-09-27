@@ -1,6 +1,8 @@
 # Data dictionary — freight LTL prototype sample data
 All figures ILLUSTRATIVE for prototype purposes, not carrier operating data.
-Network: 5-terminal Midwest cluster (SGF breakbulk hub; STL, MKC, MEM, TUL end-of-line).
+Network: hub-and-spoke — 2 breakbulk hubs (SGF Springfield MO, MEM Memphis TN) with
+spokes STL/TUL (SGF) and MKC/LIT (MEM). Operating cycles: outbound 12:00–21:00
+(bids 17:00, 21:00 cut), hub sort 21:00–05:00, AM 05:00–12:00 (bids 09:00, 12:00 cut).
 One operating day: 2026-09-28. Scenarios: `base` (1050 shipments), `light` (65% vol),
 `heavy` (130% vol). Schema is date-keyed; extend to a week by adding dates.
 
@@ -13,7 +15,9 @@ One operating day: 2026-09-28. Scenarios: `base` (1050 shipments), `light` (65% 
 | shippers.csv | customer | home terminal, commodity, density_lb_per_cuft (basis for cube inference) |
 | shipments.csv | shipment | customer, origin, dest, product (P=Priority fast, E=Economy ~1 day slower), weight, pieces, inferred_cube_cuft (planner's pickup estimate), dimmed_cube_cuft (dock actual, known too late), revenue_usd (what customer paid) |
 | forecast_lane.csv | OD x product | yesterday's lane forecast (shipments, cube) vs actuals incl. dimmed cube |
-| linehaul_actuals.csv | dispatched pup | load_id, lane, direction, turn_no (one driver turn = 2 pups), cube/weight loaded, cube_util_pct, empty flag (empty pup riding on a running turn), flows aboard |
+| linehaul_actuals.csv | dispatched pup | load_id, lane, direction, bid_id, depart_time (scheduled bid departure), turn_no (one driver turn = 2 pups), cube/weight loaded, cube_util_pct, empty flag (empty pup riding on a running turn), flows aboard |
+| bids.csv | lane x direction x bid | scheduled bid departures: cycle, depart_time, cut flag, freight cube, pups needed, drivers staffed (ceil(pups/2)) |
+| bid_opportunities.csv | directed lane | structural cut-time findings: merge the early bid into the cut — pups/drivers before vs after, lane turns saved, saving_usd, Priority freight exposure, service_check (OK/REVIEW) |
 | deviations.csv | OD x product | where the plan deviated from standard path: chosen path, reason, saving_usd |
 | cost_to_serve.csv | shipment | revenue vs pud_cost + dock_cost + linehaul_cost (by leg, see leg_cost_detail), margin_usd, margin_pct |
 | lane_scoreboard.csv | lane x direction | driver turns, cube, utilization (vs turn capacity = 2 pups), leg cost, cost_per_cube_mile_usd (leg efficiency), verdict (good miles / watch / bad miles) |
@@ -30,7 +34,8 @@ One operating day: 2026-09-28. Scenarios: `base` (1050 shipments), `light` (65% 
 
 ## Key concepts
 - **Cube inference**: shippers don't provide cube; planner estimates at pickup from shipper density. Dock dimming gives truth too late for door/trailer planning.
-- **Doubles / driver turns**: one driver pulls two pups out and brings two pups back, full or empty. The turn is the cost unit: turns(lane) = ceil(max(pups each way)/2), and turn cost is fixed whether pups are full or empty. Fill the second pup before dispatching another driver.
+- **Doubles / driver turns**: one driver pulls two pups out and brings two pups back, full or empty. The turn is the cost unit: turns(direction) = sum over scheduled bid departures of ceil(pups_in_bid/2); turns(lane) = max(turns_AB, turns_BA), and turn cost is fixed whether pups are full or empty. Fill the second pup before dispatching another driver.
+- **Bid departures and cut times**: drivers bid on start times; each bid that carries freight needs its own drivers. When freight is thin across a cycle's bids, merging the early bid into the cut departure can eliminate a driver shift — the cut-time optimizer tests this lane by lane, structurally (design) and day-specifically (simulator), and never recommends a move that sacrifices Priority service.
 - **Domiciled round trips**: drivers return to home service centers nightly; a turn is a round trip, so cancelling a turn removes capacity in BOTH directions. Equipment balances because drivers come home.
 - **Two horizons**: monthly network design sets standard paths + bounded alternates; daily execution deviates only within those bounds, purely on cost (linehaul turns vs dock handles).
 - **Network-global tower**: Central's add/cancel/reroute recommendations are checked network-wide. A locally-cheap cancel that strands return-leg freight is BLOCKED; a surge is served by the cheaper of a new turn vs rerouting into spare pup slots on a pre-approved alternate.

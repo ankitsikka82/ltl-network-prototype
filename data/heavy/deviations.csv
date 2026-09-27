@@ -1,12 +1,18 @@
 od,product,standard,chosen,reason,saving
-MEM>MKC,E,MEM>SGF>MKC,MEM>MKC direct,direct saves $533 (2 fewer handles x 17 shipments),533.5
-MEM>MKC,P,MEM>SGF>MKC,MEM>MKC direct,direct saves $748 (2 fewer handles x 20 shipments),747.62
-MEM>TUL,E,MEM>SGF>TUL,MEM>TUL direct,direct saves $768 (2 fewer handles x 20 shipments),768.11
-MEM>TUL,P,MEM>SGF>TUL,MEM>TUL direct,direct saves $795 (2 fewer handles x 32 shipments),795.02
-MKC>MEM,E,MKC>SGF>MEM,MKC>MEM direct,direct saves $787 (2 fewer handles x 25 shipments),787.08
-MKC>MEM,P,MKC>SGF>MEM,MKC>MEM direct,direct saves $909 (2 fewer handles x 35 shipments),909.32
-MKC>TUL,E,MKC>SGF>TUL,MKC>TUL direct,direct saves $959 (2 fewer handles x 35 shipments),959.46
-MKC>TUL,P,MKC>SGF>TUL,MKC>TUL direct,"direct saves $1,513 (2 fewer handles x 44 shipments)",1512.97
-STL>TUL,P,STL>SGF>TUL,STL>TUL direct,direct saves $511 (2 fewer handles x 23 shipments),510.53
-TUL>MEM,P,TUL>SGF>MEM,TUL>MEM direct,"direct saves $1,239 (2 fewer handles x 37 shipments)",1238.78
-TUL>MKC,P,TUL>SGF>MKC,TUL>MKC direct,direct saves $910 (2 fewer handles x 29 shipments),909.62
+MEM>STL,E,MEM>SGF>STL,MEM>STL direct bypass,bypass saves $710 (2 fewer handles x 19 shipments),710.42
+MEM>STL,P,MEM>SGF>STL,MEM>STL direct bypass,bypass saves $746 (2 fewer handles x 22 shipments),745.91
+MEM>TUL,E,MEM>SGF>TUL,MEM>TUL direct bypass,bypass saves $332 (2 fewer handles x 14 shipments),331.51
+MEM>TUL,P,MEM>SGF>TUL,MEM>TUL direct bypass,bypass saves $389 (2 fewer handles x 16 shipments),389.0
+MKC>LIT,E,MKC>MEM>LIT,MKC>LIT direct bypass,bypass saves $447 (2 fewer handles x 16 shipments),446.85
+MKC>LIT,P,MKC>MEM>LIT,MKC>LIT direct bypass,bypass saves $568 (2 fewer handles x 19 shipments),567.92
+MKC>SGF,E,MKC>MEM>SGF,MKC>SGF direct bypass,bypass saves $752 (2 fewer handles x 19 shipments),752.26
+MKC>SGF,P,MKC>MEM>SGF,MKC>SGF direct bypass,"bypass saves $1,741 (2 fewer handles x 42 shipments)",1740.89
+MKC>STL,E,MKC>MEM>SGF>STL,MKC>STL direct bypass,"bypass saves $1,737 (4 fewer handles x 18 shipments)",1737.39
+MKC>STL,P,MKC>MEM>SGF>STL,MKC>STL direct bypass,"bypass saves $2,032 (4 fewer handles x 21 shipments)",2031.74
+MKC>TUL,P,MKC>MEM>SGF>TUL,MKC>TUL direct bypass,"bypass saves $1,995 (4 fewer handles x 22 shipments)",1994.79
+SGF>LIT,E,SGF>MEM>LIT,SGF>LIT direct bypass,bypass saves $382 (2 fewer handles x 18 shipments),381.52
+SGF>MKC,P,SGF>MEM>MKC,SGF>MKC direct bypass,bypass saves $789 (2 fewer handles x 31 shipments),789.49
+STL>MEM,E,STL>SGF>MEM,STL>MEM direct bypass,bypass saves $919 (2 fewer handles x 25 shipments),918.59
+STL>MEM,P,STL>SGF>MEM,STL>MEM direct bypass,"bypass saves $1,066 (2 fewer handles x 27 shipments)",1065.58
+TUL>MEM,P,TUL>SGF>MEM,TUL>MEM direct bypass,"bypass saves $1,085 (2 fewer handles x 33 shipments)",1085.11
+TUL>MKC,P,TUL>SGF>MEM>MKC,TUL>MKC direct bypass,"bypass saves $1,530 (4 fewer handles x 20 shipments)",1529.9

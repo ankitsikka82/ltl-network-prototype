@@ -1,65 +1,101 @@
 origin,dest,product,rank,path,path_type,note
-SGF,STL,P,1,SGF>STL,direct,standard path - monthly design
-SGF,STL,E,1,SGF>STL,direct,standard path - monthly design
-SGF,MKC,P,1,SGF>MKC,direct,standard path - monthly design
-SGF,MKC,E,1,SGF>MKC,direct,standard path - monthly design
 SGF,MEM,P,1,SGF>MEM,direct,standard path - monthly design
 SGF,MEM,E,1,SGF>MEM,direct,standard path - monthly design
+SGF,STL,P,1,SGF>STL,direct,standard path - monthly design
+SGF,STL,E,1,SGF>STL,direct,standard path - monthly design
 SGF,TUL,P,1,SGF>TUL,direct,standard path - monthly design
 SGF,TUL,E,1,SGF>TUL,direct,standard path - monthly design
-STL,SGF,P,1,STL>SGF,direct,standard path - monthly design
-STL,SGF,E,1,STL>SGF,direct,standard path - monthly design
-STL,MKC,P,1,STL>MKC,direct,standard path - monthly design
-STL,MKC,P,2,STL>SGF>MKC,via_hub,pre-approved alternate: consolidate to gain density
-STL,MKC,E,1,STL>MKC,direct,standard path - monthly design
-STL,MKC,E,2,STL>SGF>MKC,via_hub,pre-approved alternate: consolidate to gain density
-STL,MEM,P,1,STL>MEM,direct,standard path - monthly design
-STL,MEM,P,2,STL>SGF>MEM,via_hub,pre-approved alternate: consolidate to gain density
-STL,MEM,E,1,STL>MEM,direct,standard path - monthly design
-STL,MEM,E,2,STL>SGF>MEM,via_hub,pre-approved alternate: consolidate to gain density
-STL,TUL,P,1,STL>SGF>TUL,via_hub,standard path - monthly design
-STL,TUL,P,2,STL>TUL,direct,pre-approved alternate: cut handles when heavy
-STL,TUL,E,1,STL>SGF>TUL,via_hub,standard path - monthly design
-STL,TUL,E,2,STL>TUL,direct,pre-approved alternate: cut handles when heavy
-MKC,SGF,P,1,MKC>SGF,direct,standard path - monthly design
-MKC,SGF,E,1,MKC>SGF,direct,standard path - monthly design
-MKC,STL,P,1,MKC>STL,direct,standard path - monthly design
-MKC,STL,P,2,MKC>SGF>STL,via_hub,pre-approved alternate: consolidate to gain density
-MKC,STL,E,1,MKC>STL,direct,standard path - monthly design
-MKC,STL,E,2,MKC>SGF>STL,via_hub,pre-approved alternate: consolidate to gain density
-MKC,MEM,P,1,MKC>SGF>MEM,via_hub,standard path - monthly design
-MKC,MEM,P,2,MKC>MEM,direct,pre-approved alternate: cut handles when heavy
-MKC,MEM,E,1,MKC>SGF>MEM,via_hub,standard path - monthly design
-MKC,MEM,E,2,MKC>MEM,direct,pre-approved alternate: cut handles when heavy
-MKC,TUL,P,1,MKC>SGF>TUL,via_hub,standard path - monthly design
-MKC,TUL,P,2,MKC>TUL,direct,pre-approved alternate: cut handles when heavy
-MKC,TUL,E,1,MKC>SGF>TUL,via_hub,standard path - monthly design
-MKC,TUL,E,2,MKC>TUL,direct,pre-approved alternate: cut handles when heavy
+SGF,MKC,P,1,SGF>MEM>MKC,via_hub,standard path - monthly design
+SGF,MKC,P,2,SGF>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+SGF,MKC,E,1,SGF>MEM>MKC,via_hub,standard path - monthly design
+SGF,MKC,E,2,SGF>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+SGF,LIT,P,1,SGF>MEM>LIT,via_hub,standard path - monthly design
+SGF,LIT,P,2,SGF>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+SGF,LIT,E,1,SGF>MEM>LIT,via_hub,standard path - monthly design
+SGF,LIT,E,2,SGF>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
 MEM,SGF,P,1,MEM>SGF,direct,standard path - monthly design
 MEM,SGF,E,1,MEM>SGF,direct,standard path - monthly design
-MEM,STL,P,1,MEM>STL,direct,standard path - monthly design
-MEM,STL,P,2,MEM>SGF>STL,via_hub,pre-approved alternate: consolidate to gain density
-MEM,STL,E,1,MEM>STL,direct,standard path - monthly design
-MEM,STL,E,2,MEM>SGF>STL,via_hub,pre-approved alternate: consolidate to gain density
-MEM,MKC,P,1,MEM>SGF>MKC,via_hub,standard path - monthly design
-MEM,MKC,P,2,MEM>MKC,direct,pre-approved alternate: cut handles when heavy
-MEM,MKC,E,1,MEM>SGF>MKC,via_hub,standard path - monthly design
-MEM,MKC,E,2,MEM>MKC,direct,pre-approved alternate: cut handles when heavy
+MEM,STL,P,1,MEM>SGF>STL,via_hub,standard path - monthly design
+MEM,STL,P,2,MEM>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MEM,STL,E,1,MEM>SGF>STL,via_hub,standard path - monthly design
+MEM,STL,E,2,MEM>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
 MEM,TUL,P,1,MEM>SGF>TUL,via_hub,standard path - monthly design
-MEM,TUL,P,2,MEM>TUL,direct,pre-approved alternate: cut handles when heavy
+MEM,TUL,P,2,MEM>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
 MEM,TUL,E,1,MEM>SGF>TUL,via_hub,standard path - monthly design
-MEM,TUL,E,2,MEM>TUL,direct,pre-approved alternate: cut handles when heavy
+MEM,TUL,E,2,MEM>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MEM,MKC,P,1,MEM>MKC,direct,standard path - monthly design
+MEM,MKC,E,1,MEM>MKC,direct,standard path - monthly design
+MEM,LIT,P,1,MEM>LIT,direct,standard path - monthly design
+MEM,LIT,E,1,MEM>LIT,direct,standard path - monthly design
+STL,SGF,P,1,STL>SGF,direct,standard path - monthly design
+STL,SGF,E,1,STL>SGF,direct,standard path - monthly design
+STL,MEM,P,1,STL>SGF>MEM,via_hub,standard path - monthly design
+STL,MEM,P,2,STL>MEM,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,MEM,E,1,STL>SGF>MEM,via_hub,standard path - monthly design
+STL,MEM,E,2,STL>MEM,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,TUL,P,1,STL>SGF>TUL,via_hub,standard path - monthly design
+STL,TUL,P,2,STL>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,TUL,E,1,STL>SGF>TUL,via_hub,standard path - monthly design
+STL,TUL,E,2,STL>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,MKC,P,1,STL>SGF>MEM>MKC,via_hub,standard path - monthly design
+STL,MKC,P,2,STL>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,MKC,E,1,STL>SGF>MEM>MKC,via_hub,standard path - monthly design
+STL,MKC,E,2,STL>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,LIT,P,1,STL>SGF>MEM>LIT,via_hub,standard path - monthly design
+STL,LIT,P,2,STL>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+STL,LIT,E,1,STL>SGF>MEM>LIT,via_hub,standard path - monthly design
+STL,LIT,E,2,STL>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
 TUL,SGF,P,1,TUL>SGF,direct,standard path - monthly design
 TUL,SGF,E,1,TUL>SGF,direct,standard path - monthly design
-TUL,STL,P,1,TUL>SGF>STL,via_hub,standard path - monthly design
-TUL,STL,P,2,TUL>STL,direct,pre-approved alternate: cut handles when heavy
-TUL,STL,E,1,TUL>SGF>STL,via_hub,standard path - monthly design
-TUL,STL,E,2,TUL>STL,direct,pre-approved alternate: cut handles when heavy
-TUL,MKC,P,1,TUL>SGF>MKC,via_hub,standard path - monthly design
-TUL,MKC,P,2,TUL>MKC,direct,pre-approved alternate: cut handles when heavy
-TUL,MKC,E,1,TUL>SGF>MKC,via_hub,standard path - monthly design
-TUL,MKC,E,2,TUL>MKC,direct,pre-approved alternate: cut handles when heavy
 TUL,MEM,P,1,TUL>SGF>MEM,via_hub,standard path - monthly design
-TUL,MEM,P,2,TUL>MEM,direct,pre-approved alternate: cut handles when heavy
+TUL,MEM,P,2,TUL>MEM,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
 TUL,MEM,E,1,TUL>SGF>MEM,via_hub,standard path - monthly design
-TUL,MEM,E,2,TUL>MEM,direct,pre-approved alternate: cut handles when heavy
+TUL,MEM,E,2,TUL>MEM,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,STL,P,1,TUL>SGF>STL,via_hub,standard path - monthly design
+TUL,STL,P,2,TUL>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,STL,E,1,TUL>SGF>STL,via_hub,standard path - monthly design
+TUL,STL,E,2,TUL>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,MKC,P,1,TUL>SGF>MEM>MKC,via_hub,standard path - monthly design
+TUL,MKC,P,2,TUL>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,MKC,E,1,TUL>SGF>MEM>MKC,via_hub,standard path - monthly design
+TUL,MKC,E,2,TUL>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,LIT,P,1,TUL>SGF>MEM>LIT,via_hub,standard path - monthly design
+TUL,LIT,P,2,TUL>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+TUL,LIT,E,1,TUL>SGF>MEM>LIT,via_hub,standard path - monthly design
+TUL,LIT,E,2,TUL>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,SGF,P,1,MKC>MEM>SGF,via_hub,standard path - monthly design
+MKC,SGF,P,2,MKC>SGF,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,SGF,E,1,MKC>MEM>SGF,via_hub,standard path - monthly design
+MKC,SGF,E,2,MKC>SGF,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,MEM,P,1,MKC>MEM,direct,standard path - monthly design
+MKC,MEM,E,1,MKC>MEM,direct,standard path - monthly design
+MKC,STL,P,1,MKC>MEM>SGF>STL,via_hub,standard path - monthly design
+MKC,STL,P,2,MKC>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,STL,E,1,MKC>MEM>SGF>STL,via_hub,standard path - monthly design
+MKC,STL,E,2,MKC>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,TUL,P,1,MKC>MEM>SGF>TUL,via_hub,standard path - monthly design
+MKC,TUL,P,2,MKC>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,TUL,E,1,MKC>MEM>SGF>TUL,via_hub,standard path - monthly design
+MKC,TUL,E,2,MKC>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,LIT,P,1,MKC>MEM>LIT,via_hub,standard path - monthly design
+MKC,LIT,P,2,MKC>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+MKC,LIT,E,1,MKC>MEM>LIT,via_hub,standard path - monthly design
+MKC,LIT,E,2,MKC>LIT,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,SGF,P,1,LIT>MEM>SGF,via_hub,standard path - monthly design
+LIT,SGF,P,2,LIT>SGF,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,SGF,E,1,LIT>MEM>SGF,via_hub,standard path - monthly design
+LIT,SGF,E,2,LIT>SGF,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,MEM,P,1,LIT>MEM,direct,standard path - monthly design
+LIT,MEM,E,1,LIT>MEM,direct,standard path - monthly design
+LIT,STL,P,1,LIT>MEM>SGF>STL,via_hub,standard path - monthly design
+LIT,STL,P,2,LIT>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,STL,E,1,LIT>MEM>SGF>STL,via_hub,standard path - monthly design
+LIT,STL,E,2,LIT>STL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,TUL,P,1,LIT>MEM>SGF>TUL,via_hub,standard path - monthly design
+LIT,TUL,P,2,LIT>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,TUL,E,1,LIT>MEM>SGF>TUL,via_hub,standard path - monthly design
+LIT,TUL,E,2,LIT>TUL,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,MKC,P,1,LIT>MEM>MKC,via_hub,standard path - monthly design
+LIT,MKC,P,2,LIT>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
+LIT,MKC,E,1,LIT>MEM>MKC,via_hub,standard path - monthly design
+LIT,MKC,E,2,LIT>MKC,direct,"pre-approved alternate: bypass direct, cut handles when heavy"
