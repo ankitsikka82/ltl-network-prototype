@@ -50,19 +50,88 @@ st.title("LTL Network Planning Prototype")
 st.caption(f"Operating day {k['date']} · 5-terminal cluster (SGF breakbulk hub; STL, MKC, MEM, TUL) · "
            f"scenario: {scenario}")
 
-tabs = st.tabs(["Network", "Nightly KPIs", "Load plan", "Deviations",
+tabs = st.tabs(["Start here", "Network", "Nightly KPIs", "Load plan", "Deviations",
                 "Control tower", "Cost to serve", "Lane scoreboard",
                 "Forecast vs actual", "Ontology & context", "Methodology",
                 "Ask the network", "Data downloads"])
 
-# ------------------------------ Network (start here) ------------------------------
+# ------------------------------ Start here ------------------------------
 with tabs[0]:
+    st.subheader("What this is")
+    st.markdown("""
+This is a **working prototype of the AI planning stack for an LTL freight network** — not a slide
+deck, a running model. Every number in it is computed from sample data by the same rules a production
+system would use: doubles economics, a monthly network design, cost-driven deviations, and a central
+control tower that checks every move against the whole network. All figures are **illustrative sample
+data**, not carrier operating data.""")
+    st.subheader("Its purpose")
+    st.markdown("""
+It answers the three questions executives and planners actually ask about AI in freight:
+1. **How does AI fit into network planning?** — as a stack of four layers, each doing the job it's good at.
+2. **Where does each kind of AI earn its keep?** — ML predicts, OR decides, GenAI explains. Nothing is used where it adds no value.
+3. **What would it take to run this for real?** — the data, the models, and the context layer, all visible in this app.""")
+    st.subheader("The stack — four layers, four jobs")
+    st.graphviz_chart("""
+digraph {
+  rankdir=LR;
+  node [shape=box, style="rounded,filled", fillcolor=white];
+  ctx [label="Context engineering\\nthe shared truth", fillcolor=gold, shape=cylinder];
+  ml [label="ML\\nPREDICTS\\nforecasts · cube inference"];
+  or [label="OR\\nDECIDES\\nplan · deviations · tower"];
+  gen [label="GenAI\\nEXPLAINS\\nanswers · drafts · chats"];
+  ctx -> ml [label="feature defs"];
+  ctx -> or [label="constraints"];
+  ctx -> gen [label="ground truth"];
+  ml -> or [label="demand + cube"];
+  or -> gen [label="decisions"];
+}""", use_container_width=True)
+    r1, r2, r3, r4 = st.columns(4)
+    with r1:
+        st.markdown("**Context engineering**\n\nThe ontology + data dictionary: entities, constraints, business rules, metric definitions. Every other layer reads the same truth, so the forecaster, the optimizer, and the explainer never disagree about what a *lane*, a *turn*, or a *good mile* is.")
+    with r2:
+        st.markdown("**ML — predicts**\n\nLane-level demand forecasts and pickup cube inference (shippers don't provide cube; density profiles infer it). Used *only* where prediction beats a rule — never for decisions.")
+    with r3:
+        st.markdown("**OR — decides**\n\nThe nightly plan, cost-driven deviations, and tower recommendations. Minimizes driver turns + dock handles subject to hard constraints. Math, not vibes — every move is auditable.")
+    with r4:
+        st.markdown("**GenAI — explains**\n\nThe copilot answers questions and drafts service-center messages, grounded *only* on optimizer outputs + the ontology. It never decides and never invents a number — if it can't check it, it says so.")
+    st.subheader("Business architecture — three horizons, one network")
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        st.markdown("**Monthly — network design**\n\nNodes, arcs, one standard path per OD × product, plus a small bounded set of pre-approved alternates. This is the structure everything else must respect.")
+    with b2:
+        st.markdown("**Daily — execution**\n\nStart from the standard plan. Deviate *only* onto a pre-approved alternate, *only* when total network cost (turns + handles) improves. Cube first, fewest drivers, fewest touches.")
+    with b3:
+        st.markdown("**Intraday — control tower**\n\nCentral watches volume at 10:00 / 14:00 / 18:00, projects turns vs plan, and recommends add / cancel / reroute / dock moves — each network-checked, because a turn is a round trip.")
+    st.subheader("Tech architecture — what runs where")
+    st.markdown("""
+`data_build/build.py` (deterministic, seeded) generates the sample world → CSVs + `ontology.yaml` →
+this Streamlit app computes KPIs, plans, deviations, and tower moves live → the **Ask the network**
+tab calls *your* LLM (Anthropic or OpenAI-compatible, your key) with a prompt built only from this
+scenario's data. Swap the CSVs for real feeds and the heuristic for a MIP solver, and the architecture
+doesn't change.""")
+    st.subheader("Guided demo — five steps, about ten minutes")
+    st.markdown("""
+**1. Network** — the playing field. Press ▶ and watch a Priority shipment ride STL → SGF → MEM.
+Note the gold breakbulk hub: that's where handles happen, and handles cost money. Toggle the relay
+overlay: blue diamonds are driver-swap points on long lanes — the trailer keeps rolling while drivers
+stay within hours-of-service. Freight path and driver path are two different things.
+**2. Nightly KPIs + Load plan** — the plan the optimizer built: 22 driver turns, 79.8% cube, $137k cost to serve. Open the load plan and see turns as pairs of pups — some running empty, because the driver comes home either way.
+**3. Deviations** — nine times the plan beat the standard path, saving $5,847. Heavy via-hub flows went direct (fewer handles); light directs consolidated via hub (more density).
+**4. Control tower** — the day goes off-plan at 10:00. Read the **move of the day**: the cancel the agent *blocked*, and why. Then open the **what-if simulator** and surge a lane yourself — watch the same network check work your scenario.
+**5. Ask the network** — interrogate it. It can only answer from the data: lanes, turns, dollars, rules.
+*Short on time? Do 1, 4, and 5 — that's the whole thesis in three minutes.*""")
+    st.caption("Planners: the tower tab is your desk. Executives: this page plus the Ontology & context tab is the governance story.")
+
+# ------------------------------ Network (start here) ------------------------------
+with tabs[1]:
     st.caption("Start here: this is the network the whole app reasons about. "
                "Five terminals, SGF as the breakbulk hub, linehaul lanes between them, "
                "and one standard path per OD × product from the monthly design.")
 
-    def _network_dot(highlight=()):
-        """highlight: set of 'A>B' legs to draw bold red."""
+    def _network_dot(highlight=(), show_relay=True):
+        """highlight: set of 'A>B' legs to draw bold red.
+        Relay: lanes over ~250 mi get a midpoint diamond - the trailer keeps rolling
+        while drivers swap, so each driver stays within hours-of-service."""
         lines = ["digraph {", "  rankdir=LR;", "  node [shape=circle, style=filled, fillcolor=white];"]
         for _, t in d["terminals"].iterrows():
             if t["type"] == "breakbulk":
@@ -72,20 +141,56 @@ with tabs[0]:
                 lines.append(f'  {t["terminal"]} [label="{t["terminal"]}\\n{t["city"].split()[0]}"];')
         for _, l in d["lanes"].iterrows():
             a, b = l["terminal_a"], l["terminal_b"]
+            mi = int(l["miles"])
+            relayed = show_relay and mi > 250
+            if relayed:
+                r = f"R_{a}_{b}"
+                lines.append(f'  {r} [shape=diamond, fillcolor=lightblue, '
+                             f'label="relay\\n~{mi // 2} mi"];')
             for x, y in ((a, b), (b, a)):
-                tag = f"{x}>{y}"
-                if tag in highlight:
-                    lines.append(f'  {x} -> {y} [label="{int(l["miles"])} mi", color=red, '
-                                 f'penwidth=3.0];')
+                hl = f"{x}>{y}" in highlight
+                if relayed:
+                    r = f"R_{a}_{b}"
+                    col = "red" if hl else "steelblue"
+                    pw = ", penwidth=3.0" if hl else ""
+                    lines.append(f'  {x} -> {r} [color={col}{pw}, style=dotted];')
+                    lines.append(f'  {r} -> {y} [label="{mi} mi", color={col}{pw}];')
+                elif hl:
+                    lines.append(f'  {x} -> {y} [label="{mi} mi", color=red, penwidth=3.0];')
                 else:
-                    lines.append(f'  {x} -> {y} [label="{int(l["miles"])} mi", color=gray70];')
+                    lines.append(f'  {x} -> {y} [label="{mi} mi", color=gray70];')
         lines.append("}")
         return "\n".join(lines)
 
     st.subheader("Network map — nodes and linehaul arcs")
-    st.graphviz_chart(_network_dot(), use_container_width=True)
+    show_relay = st.checkbox("Show relay points (lanes over ~250 mi)", value=True,
+                             help="We run a relay network: on long lanes the trailer keeps rolling "
+                             "while drivers swap at the midpoint, so each driver stays within "
+                             "hours-of-service. Freight path and driver path are two different things.")
+    st.graphviz_chart(_network_dot(show_relay=show_relay), use_container_width=True)
     st.caption("Arcs are linehaul lanes (miles shown). Gold double-circle = breakbulk hub "
-               "where freight cross-docks; the rest are end-of-line centers doing local P&D.")
+               "where freight cross-docks; the rest are end-of-line centers doing local P&D. "
+               "Blue diamonds = relay points: driver swap, no freight handling.")
+    with st.expander("🔁 Relay network: two networks, not one"):
+        st.markdown("""
+**The freight network** (shipments, handles, breakbulk sorts) decides cost and service.
+**The driver network** (relay legs, domiciles, hours-of-service) decides who actually drives.
+
+A lane marked **direct** means *no freight handling* between origin and destination — but the
+**driver may still relay**: on lanes over ~250 miles (≈5h each way) the trailer swaps drivers
+at the midpoint because no same-day round trip fits inside 11 driving hours. Each relay-leg
+turn is domiciled at its home end, so a lane-turn decomposes into one relay-leg turn per leg.
+
+A shipment can also flow *through another center* when the driver needs to get home within
+hours — that's a driver-path decision, not a freight deviation, and it costs no extra handles.""")
+        rl = d["lanes"][d["lanes"]["miles"] > 250].copy()
+        rl["relay_legs"] = "2 × ~" + (rl["miles"] // 2).astype(int).astype(str) + " mi"
+        rl["domiciles"] = rl["terminal_a"] + " + " + rl["terminal_b"]
+        st.dataframe(rl[["terminal_a", "terminal_b", "miles", "relay_legs", "domiciles"]]
+                     .rename(columns={"terminal_a": "from", "terminal_b": "to"}),
+                     use_container_width=True, hide_index=True)
+        st.caption("Prototype costs the lane at its blended $/mi (turn = 2 × miles × $/mi). "
+                   "Production prices each relay leg at its own domicile's $/mi.")
 
     st.subheader("Watch a shipment move")
     st.caption("A Priority shipment STL → MEM rides the standard path STL → SGF → MEM. "
@@ -93,11 +198,12 @@ with tabs[0]:
     legs = ["STL>SGF", "SGF>MEM"]
     if st.button("▶ Play shipment flow"):
         ph = st.empty()
-        ph.graphviz_chart(_network_dot(), use_container_width=True)
+        ph.graphviz_chart(_network_dot(show_relay=show_relay), use_container_width=True)
         import time as _t
         for i, leg in enumerate(legs):
             _t.sleep(0.9)
-            ph.graphviz_chart(_network_dot(set(legs[:i + 1])), use_container_width=True)
+            ph.graphviz_chart(_network_dot(set(legs[:i + 1]), show_relay=show_relay),
+                              use_container_width=True)
         _t.sleep(0.6)
         st.success("STL → SGF → MEM: two handles (one cross-dock at SGF), path miles ≈ "
                    f"{int(d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','STL'),'miles'] + d['lanes'].set_index(['terminal_a','terminal_b']).loc[('SGF','MEM'),'miles'])}.")
@@ -122,7 +228,7 @@ with tabs[0]:
                    "The monthly network design sets the standard; the daily plan deviates within bounds.")
 
 # ------------------------------ Nightly KPIs ------------------------------
-with tabs[1]:
+with tabs[2]:
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Revenue", f"${k['revenue_usd']:,.0f}")
     c2.metric("Cost to serve", f"${k['cost_to_serve_usd']:,.0f}")
@@ -157,7 +263,7 @@ with tabs[1]:
                "Heavy day: directs cut handles to 2.12 and lift utilization to 85%.")
 
 # ------------------------------ Load plan ------------------------------
-with tabs[2]:
+with tabs[3]:
     st.subheader("Dispatched linehaul pups, grouped into driver turns")
     loads = d["linehaul_actuals"].copy()
     show_empty = st.checkbox("Show empty pups", value=True)
@@ -177,7 +283,7 @@ with tabs[2]:
                "the waste is density, which is why cube comes first in the optimizer.")
 
 # ------------------------------ Deviations ------------------------------
-with tabs[3]:
+with tabs[4]:
     st.subheader("Cost-driven deviations from standard paths")
     dev = d["deviations"]
     if dev.empty:
@@ -191,18 +297,172 @@ with tabs[3]:
                "consolidate via hub (gain density).")
 
 # ------------------------------ Control tower ------------------------------
-with tabs[4]:
+with tabs[5]:
     st.subheader("Central control tower — day-of volume vs plan")
     st.caption("As freight hits the dock, Central compares projected turns to the plan "
                "and recommends adjustments to the service centers. "
                "Prototype uses rule-based triggers; production pairs optimization with GenAI.")
+
     ev = d["tower_events"]
     ac = d["tower_actions"]
+
+    # ---- Move of the day: the most instructive recommendation ----
+    st.subheader("Move of the day")
+    blocked = ac[ac["network_check"].str.startswith("BLOCKED", na=False)]
+    if not blocked.empty:
+        m = blocked.iloc[0]
+        mev = ev[ev["event_id"] == m["event_id"]].iloc[0]
+        st.warning(f"**{m['action_id']} — the move we did NOT make** ({mev['checkpoint']}, {mev['direction']})")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**What the local view said:**\n\n"
+                        f"Volume is short on {mev['direction']} — cancelling a turn looks like "
+                        "an easy saving. Any service center manager would take it.")
+        with c2:
+            st.markdown("**What the network check said:**\n\n"
+                        f"{m['network_check']} "
+                        "A turn is a domiciled round trip: cancelling it removes capacity in *both* directions.")
+        st.caption("This is the tower's real job — not saying yes to the obvious, but knowing when the "
+                   "obvious is wrong for the network. Try it yourself in the simulator below.")
+        if st.button("💬 Ask the copilot about this move", key="ask_hero"):
+            st.session_state["pending_q"] = (
+                f"At {mev['checkpoint']} there was a {mev['trigger']} on {mev['direction']} "
+                f"(plan {mev['planned_turns']} turns, projected {mev['projected_turns']}). "
+                f"Why was cancelling a turn BLOCKED, and what did the network check find?")
+            st.info("Question queued — open the **Ask the network** tab and it will ask automatically.")
     c1, c2, c3 = st.columns(3)
     c1.metric("Events", len(ev))
     c2.metric("Recommended actions", len(ac))
     c3.metric("Net impact", f"${k['tower_net_usd']:,.0f}",
               "savings" if k["tower_net_usd"] < 0 else "cost")
+
+    # ---- What-if simulator ----
+    st.subheader("What-if simulator — you be the tower")
+    st.caption("Pick a lane and shock its volume. The simulator runs the *same rules* as the nightly "
+               "engine: turns = ceil(max pups either way / 2) · turn cost = 2 × miles × $/mi · "
+               "reroutes only onto pre-approved alternates with spare pup slots · a cancel must leave "
+               "room in BOTH directions.")
+    loads = d["linehaul_actuals"]
+    pups_dir = loads.groupby(["lane", "direction"]).size()
+    pups_lane = loads.groupby("lane").size()
+    turns_lane = loads.groupby("lane")["turn_no"].max()
+    # lane lookup by unordered endpoint pair -> {miles, cpm, disp (plan lane string)}
+    # (lane_scoreboard carries miles + $/mi for every lane in the plan, incl. deviation directs)
+    lane_lookup = {}
+    for _, l in d["lane_scoreboard"].drop_duplicates("lane").iterrows():
+        key = frozenset(str(l["lane"]).split("-"))
+        lane_lookup[key] = {"miles": int(l["miles"]), "cpm": float(l["cost_per_mile_usd"]),
+                            "disp": l["lane"]}
+    def _lane_of(a, b):
+        return lane_lookup[frozenset([a, b])]
+    dirs = sorted(loads["direction"].unique())
+    sim_dir = st.selectbox("Lane direction", dirs, index=dirs.index("SGF>MEM") if "SGF>MEM" in dirs else 0)
+    delta = st.slider("Volume change on this direction", -100, 100, 40, 5,
+                      format="%d%%", help="Positive = surge, negative = shortfall. "
+                      "-100% means the direction goes to zero.")
+    a, b = sim_dir.split(">")
+    info = _lane_of(a, b)
+    lane_disp, miles, cpm = info["disp"], info["miles"], info["cpm"]
+    p_out = int(pups_dir.get((lane_disp, sim_dir), 0))
+    p_in = int(pups_dir.get((lane_disp, f"{b}>{a}"), 0))
+    planned = int(turns_lane.get(lane_disp, 0))
+    new_out = max(0, round(p_out * (1 + delta / 100)))
+    import math as _m
+    need = _m.ceil(max(new_out, p_in) / 2) if max(new_out, p_in) > 0 else 0
+    gap = need - planned
+    turn_cost = 2 * miles * cpm
+    DOCK = 14.0
+    st.write(f"**Now:** {p_out} pups {sim_dir} / {p_in} pups {b}>{a} → {planned} planned turns "
+             f"(turn = ${turn_cost:,.0f}). **After {delta:+d}%:** {new_out} pups → **{need} turns needed** "
+             f"(gap {gap:+d}).")
+    if miles > 250:
+        st.caption(f"🔁 Relay lane ({miles} mi > ~250 mi): each lane-turn = 2 relay-leg turns "
+                   f"(~{miles // 2} mi each, drivers swap at midpoint, freight never touches the dock). "
+                   f"A cancel here frees one driver at each domicile.")
+    verdict, detail, impact = None, "", 0.0
+    if gap > 0:
+        overflow = new_out - planned * 2
+        # candidate ODs whose standard path uses this leg -> pre-approved alternate w/ spare slots
+        dr = d["design_routes"]
+        cand = dr[dr["standard_path"].str.contains(sim_dir, regex=False)]
+        alt_p = os.path.join(DATA, "alternate_paths.csv")
+        alt = pd.read_csv(alt_p) if os.path.exists(alt_p) else pd.DataFrame()
+        best = None
+        for _, r in cand.iterrows():
+            a2 = alt[(alt["origin"] == r["origin"]) & (alt["dest"] == r["dest"]) &
+                     (alt["product"] == r["product"]) & (alt["rank"] == 2)]
+            if a2.empty:
+                continue
+            legs = a2.iloc[0]["path"].split(">")
+            legs = [(legs[i], legs[i + 1]) for i in range(len(legs) - 1)]
+            spare, ok = 0, True
+            for x, y in legs:
+                lk = _lane_of(x, y)["disp"]
+                if lk not in turns_lane.index:
+                    ok = False
+                    break
+                spare += max(0, int(turns_lane[lk]) * 2 - int(pups_lane.get(lk, 0)))
+            if ok and (best is None or spare > best[0]):
+                best = (spare, f"{r['origin']}>{r['dest']}/{r['product']}",
+                        ">".join(a2.iloc[0]["path"].split(">")))
+        if best and best[0] >= overflow:
+            # shipments per pup on this direction (for handle-cost estimate)
+            sh = d["shipments"].merge(dr, on=["origin", "dest", "product"], how="left")
+            nsh = int(sh[sh["standard_path"].str.contains(sim_dir, regex=False, na=False)].shape[0])
+            spp = nsh / max(1, p_out)
+            cost = overflow * spp * 2 * DOCK
+            verdict = ("REROUTE", f"network-OK: alternate {best[2]} ({best[1]}) has {best[0]} spare pup "
+                       f"slots ≥ {overflow} overflow pups — linehaul rides ~free on running turns",
+                       cost,
+                       f"Reroute the overflow via the pre-approved alternate. Cost ≈ ${cost:,.0f} "
+                       f"in extra dock handles (2 per shipment); no new driver turn needed.")
+        else:
+            cost = gap * turn_cost
+            why = (f"no pre-approved alternate with ≥{overflow} spare pup slots"
+                   + (f" (best: {best[0]} on {best[2]})" if best else ""))
+            verdict = ("ADD TURN", f"network-OK: {why}; new turn is the network-cheapest option",
+                       cost,
+                       f"Add {gap} driver turn(s) on {sim_dir}: +${cost:,.0f}. Protects on-time; "
+                       f"covers the surge cube.")
+    elif gap < 0:
+        # cancel check: remaining turns must cover BOTH directions (build.py rule)
+        keep = planned + gap
+        if _m.ceil(max(new_out, p_in) / 2) <= keep:
+            save = -gap * turn_cost
+            verdict = ("CANCEL", "network-OK: remaining turns cover projected pups in BOTH directions "
+                       "(turn is a round trip)", -save,
+                       f"Cancel {-gap} turn(s) on {lane_disp}: −${save:,.0f}. Consolidate remaining "
+                       f"freight onto running turns.")
+        else:
+            verdict = ("KEEP", f"BLOCKED: cancelling looks like a ${-gap * turn_cost:,.0f} local saving, "
+                       f"but the return direction still needs the pups — the turn is a round trip",
+                       0.0,
+                       "Do NOT cancel. A local saving that strands return-leg freight is worse for the network.")
+    else:
+        verdict = ("HOLD", "network-OK: planned turns still cover the shocked volume",
+                   0.0, "No action — the plan absorbs this.")
+    label, netchk, impact, rec = verdict
+    if label in ("REROUTE", "ADD TURN"):
+        st.success(f"**Recommendation: {label}** — {rec}")
+    elif label == "CANCEL":
+        st.success(f"**Recommendation: {label}** — {rec}")
+    elif label == "KEEP":
+        st.error(f"**Recommendation: {label} THE TURN** — {rec}")
+    else:
+        st.info(f"**Recommendation: {label}** — {rec}")
+    st.write(f"**Network check:** {netchk}")
+    st.write(f"**Cost impact:** ${impact:+,.0f} · **Service:** "
+             f"{'protects on-time; covers surge cube' if gap > 0 else 'no service risk at projected volume' if gap < 0 else 'none'}")
+    if st.button("💬 Ask the copilot about this simulation", key="ask_sim"):
+        st.session_state["pending_q"] = (
+            f"What-if: volume on {sim_dir} changes {delta:+d}% (pups {p_out} → {new_out}, "
+            f"planned turns {planned}, needed {need}). The simulator recommends {label}: {rec} "
+            f"Network check: {netchk} Cost impact ${impact:+,.0f}. "
+            f"Explain whether you agree and what Central should tell the service center.")
+        st.info("Question queued — open the **Ask the network** tab and it will ask automatically.")
+
+    # ---- Full event/action log ----
+    st.subheader("All tower events & actions")
     if ev.empty:
         st.info("No interventions — the day is running to plan.")
     else:
@@ -210,26 +470,26 @@ with tabs[4]:
         evf = ev if cp == "All" else ev[ev["checkpoint"] == cp]
         st.dataframe(evf, use_container_width=True, hide_index=True)
         st.subheader("Recommended actions + copilot drafts")
-        for _, a in ac[ac["event_id"].isin(evf["event_id"])].iterrows():
+        for _, act in ac[ac["event_id"].isin(evf["event_id"])].iterrows():
             icon = {"add_turn": ":bus:", "cancel_turn": ":scissors:",
                     "adjust_dock": ":warehouse:", "reroute": ":repeat:",
-                    "keep_turn": ":octagonal_sign:"}.get(a["action_type"], ":wrench:")
-            blocked = str(a.get("network_check", "")).startswith("BLOCKED")
-            with st.expander(f"{icon} {a['action_id']} — {a['detail']} "
-                             f"({a['cost_impact_usd']:+,.0f}$)".replace("+$", "+$")):
-                st.write(f"**Service impact:** {a['service_impact']}")
-                st.write(f"**Cost impact:** ${a['cost_impact_usd']:,.0f}")
-                if blocked:
-                    st.error(f"Network check: {a['network_check']}")
+                    "keep_turn": ":octagonal_sign:"}.get(act["action_type"], ":wrench:")
+            blk = str(act.get("network_check", "")).startswith("BLOCKED")
+            with st.expander(f"{icon} {act['action_id']} — {act['detail']} "
+                             f"({act['cost_impact_usd']:+,.0f}$)".replace("+$", "+$")):
+                st.write(f"**Service impact:** {act['service_impact']}")
+                st.write(f"**Cost impact:** ${act['cost_impact_usd']:,.0f}")
+                if blk:
+                    st.error(f"Network check: {act['network_check']}")
                 else:
-                    st.success(f"Network check: {a['network_check']}")
-                st.info(f"Copilot draft: {a['copilot_message']}")
+                    st.success(f"Network check: {act['network_check']}")
+                st.info(f"Copilot draft: {act['copilot_message']}")
     st.caption("Every recommendation is network-checked: a turn is a domiciled round trip, "
                "so a cancel must leave room in BOTH directions; a reroute must land in spare "
                "pup slots on the alternate path. Locally-cheap moves that hurt the network are blocked.")
 
 # ------------------------------ Cost to serve ------------------------------
-with tabs[5]:
+with tabs[6]:
     st.subheader("Cost to serve vs what the customer paid")
     cts = d["cost_to_serve"].copy()
     f1, f2 = st.columns(2)
@@ -267,7 +527,7 @@ with tabs[5]:
                  "high fixed P&D cost, on an imbalanced leg where it absorbs empty-return cost.")
 
 # ------------------------------ Lane scoreboard ------------------------------
-with tabs[6]:
+with tabs[7]:
     st.subheader("Leg efficiency — good mile vs bad mile")
     sb = d["lane_scoreboard"].copy()
     verdict_icon = {"good miles": ":green_circle:", "watch": ":yellow_circle:",
@@ -281,7 +541,7 @@ with tabs[6]:
                "Good miles: >=70% cube on a needed lane. Bad miles: empty or <40%.")
 
 # ------------------------------ Forecast vs actual ------------------------------
-with tabs[7]:
+with tabs[8]:
     st.subheader("Lane-level forecast (made yesterday) vs actuals")
     fc = d["forecast_lane"].copy()
     fc["cube_err_pct"] = ((fc["forecast_cube_cuft"] - fc["actual_cube_cuft"])
@@ -293,7 +553,7 @@ with tabs[7]:
                "(shippers don't provide cube). Dock dimming gives truth — too late to plan on.")
 
 # ------------------------------ Ontology & context ------------------------------
-with tabs[8]:
+with tabs[9]:
     st.subheader("Context engineering: the layer everything else stands on")
     st.markdown("""
 **Context engineering** is the discipline of giving every AI in the stack the same, complete,
@@ -360,7 +620,7 @@ digraph {
 - **Leverage:** the context layer is the durable asset. Models get swapped; the ontology compounds.""")
 
 # ------------------------------ Methodology ------------------------------
-with tabs[9]:
+with tabs[10]:
     st.subheader("Two planning horizons")
     st.markdown("""
 **Monthly network design** sets the structure: nodes, arcs, and one standard path per OD x product,
@@ -393,6 +653,25 @@ recommends add/cancel/reroute/dock actions. Every recommendation passes a **netw
 - **Surge:** compare adding a turn vs rerouting overflow onto a pre-approved alternate with spare pup
   slots; recommend whichever is cheaper network-wide.
 This is the intelligence the tower team shouldn't have to do in their heads.""")
+    st.subheader("Relay network — freight path vs driver path")
+    st.markdown("""
+We run a **relay network**: two networks overlaid on the same lanes.
+
+- **Freight network** — shipments, dock handles, breakbulk sorts. Decides cost and service.
+  A lane marked *direct* means no freight handling between origin and destination.
+- **Driver network** — relay legs, domiciled drivers, hours-of-service. Decides who actually drives.
+  On lanes over ~250 miles the trailer swaps drivers at a midpoint relay point — the freight never
+  touches the dock — because a 350-mile lane is ~6.5h one way and no same-day round trip fits inside
+  11 driving hours. Each driver does a short out-and-back and sleeps at home.
+
+So a shipment can flow *through another center* even on a "direct" freight path when the driver
+needs to get home within hours. That is a driver-path decision, not a freight deviation, and it
+costs no extra handles. One lane-turn decomposes into one relay-leg turn per leg, each domiciled
+at its home end — a cancel on a relayed lane frees one driver at *each* domicile.
+
+**Costing note:** the prototype prices a lane at its blended $/mi (turn = 2 × miles × $/mi), which
+is exact when domicile rates match. Production prices each relay leg at its own domicile's $/mi —
+domicile pay and demographics differ, and that's a real (if second-order) cost lever.""")
     st.subheader("Conversational copilot (Ask the network)")
     st.markdown("""
 The **Ask the network** tab is a grounded GenAI layer: your LLM (Anthropic Claude natively,
@@ -419,7 +698,7 @@ implementation stack (Python, MIP, hierarchical lane forecast, density profiles 
 ML optimization proxy, LLM explainer).""")
 
 # ------------------------------ Ask the network ------------------------------
-with tabs[10]:
+with tabs[11]:
     st.subheader("Ask the network — conversational copilot")
     st.caption("Grounded in this scenario's data: KPIs, deviations, tower events, lane scoreboard, "
                "cost-to-serve. The model answers only from this context.")
@@ -581,7 +860,7 @@ with tabs[10]:
             st.session_state["chat"].append({"role": "assistant", "content": ans})
 
 # ------------------------------ Data downloads ------------------------------
-with tabs[11]:
+with tabs[12]:
     st.subheader("Download the sample data")
     for name in ["terminals", "lanes", "design_routes", "shippers", "shipments",
                  "forecast_lane", "linehaul_actuals", "deviations",

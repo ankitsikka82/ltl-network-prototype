@@ -9,11 +9,29 @@ entities:
   Lane:
     attrs: [terminal_a, terminal_b, miles, cost_per_mile_usd]
     desc: Linehaul lane. cost_per_mile varies by domiciled driver pay + local demographics.
+          Lanes over ~250 miles relay at a midpoint so no driver exceeds hours-of-service
+          on an out-and-back; see RelayLeg.
   Product:
     values: {P: "Priority - fast, next-day regional", E: "Economy - ~1 day slower"}
   DesignRoute:
     attrs: [origin, dest, product, standard_path, path_type, path_miles]
-    desc: "Structured network: every OD x product has ONE standard path we try to follow."
+    desc: "Structured network: every OD x product has ONE standard path we try to follow.
+           This is the FREIGHT path (where shipments travel and get handled) - not the
+           DRIVER path. path_type 'direct' means no freight handling between origin and
+           dest; the DRIVER may still relay (trailer swaps drivers, freight never touches
+           the dock). Freight path and driver path are two different things."
+  RelayPoint:
+    attrs: [relay_id, lane, midpoint_miles]
+    desc: Driver swap point on long lanes. The trailer keeps rolling; drivers swap so
+          each stays within hours-of-service. No freight handling happens here.
+  RelayLeg:
+    attrs: [relay_id, from, to, miles, domicile]
+    desc: One driver's out-and-back segment of a lane. Each relay-leg turn is domiciled
+          at its home end. A lane-turn decomposes into one relay-leg turn per leg.
+  HoursOfService:
+    desc: Drivers are limited to 11 hours driving. A 350-mile lane is ~6.5h one way,
+          so no same-day round trip is legal - the lane relays at midpoint and each
+          driver does a ~3.5h out-and-back, home nightly.
   Shipment:
     attrs: [shipment_id, date, customer, origin, dest, product, weight_lbs, pieces,
             density_lb_per_cuft, inferred_cube_cuft, dimmed_cube_cuft, revenue_usd]
@@ -32,6 +50,9 @@ entities:
     desc: Domiciled driver unit. Every dispatch is out-and-back; driver returns to
           home center nightly. turns(lane) = max(trailers_out, trailers_in).
           Equipment balances nightly BECAUSE drivers come home.
+          On lanes over ~250 miles a lane-turn decomposes into one relay-leg
+          turn per leg, each domiciled at its leg's home end. The prototype counts
+          lane-turns; production plans relay-leg turns.
   Deviation:
     attrs: [od, product, standard, chosen, reason, saving_usd]
     desc: Cost-driven departure from the standard path. Two kinds only.
@@ -57,6 +78,10 @@ constraints:  # hard rules the math model must respect
   - priority_service: "path legs <= 2 AND path miles <= 600"
   - economy_service: "path legs <= 2 AND path miles <= 1000"
   - domicile: "every driver returns to home service center same night; a turn is a ROUND TRIP"
+  - relay: "lanes over ~250 miles relay at midpoint: the trailer keeps rolling while
+      drivers swap, so each driver stays within 11h hours-of-service. A lane-turn
+      decomposes into one relay-leg turn per leg, each domiciled at its home end.
+      'Direct' describes the FREIGHT path (no handling); the DRIVER path may still relay."
   - equipment_balance: "pups available at terminal >= pups dispatched (nightly)"
   - bounded_deviation: "daily path choice restricted to pre-approved alternate set (alternate_paths.csv)"
 
@@ -76,6 +101,12 @@ business_rules:  # planner heuristics encoded as context
   - tower_rule: "evaluate every tower action NETWORK-WIDE: a cancel must leave room in BOTH
       directions (round trip); a reroute must land in spare pup slots on the alternate path.
       Block locally-cheap moves that hurt the network."
+  - relay_rule: "plan TWO networks, not one. The FREIGHT network (shipments, handles,
+      breakbulk sorts) decides cost and service. The DRIVER network (relay legs, domiciles,
+      hours-of-service) decides who actually drives. A shipment may flow through another
+      center even on a 'direct' freight path when the driver needs to get home within hours.
+      Price each relay leg at its domicile's $/mi in production; the prototype uses the
+      lane's blended $/mi."
 
 metrics:
   cube_utilization_pct:
@@ -83,7 +114,8 @@ metrics:
     good: ">= 85 loaded legs"
   driver_turns:
     def: "turns(lane) = ceil(max(pups needed each way) / 2); one driver, two pups, round trip"
-    note: "the cost unit of linehaul: fixed whether pups are full or empty"
+    note: "the cost unit of linehaul: fixed whether pups are full or empty. On relayed lanes
+           (>~250 mi) one lane-turn = one relay-leg turn per leg, each with its own domiciled driver."
   handles_per_shipment:
     def: "dock touches per shipment: 2 direct, 4 via hub"
     lever: "loading directs is the handle-reduction lever"
